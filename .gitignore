@@ -1,0 +1,23 @@
+# Secretos — NUNCA subir
+serviceAccountKey.json
+.env
+
+# Stockfish fuente y binarios (se instala en el servidor)
+stockfish/
+stockfish.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+
+# Archivos temporales
+estructura.txt
+
+# Sistema
+.DS_Store
+Thumbs.db
+.vscode/

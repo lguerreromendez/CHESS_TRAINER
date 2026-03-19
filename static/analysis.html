@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Análisis · Chess Trainer</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Crimson+Pro:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"/>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <style>
+    body { padding: 0; }
+
+    .analysis-layout {
+      display: grid;
+      grid-template-columns: 520px 1fr;
+      gap: 20px;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 800px) {
+      .analysis-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Tablero ── */
+    #board-analysis {
+      width: 100% !important;
+      border: 3px solid var(--gold-dim);
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(201,168,76,0.08), 0 8px 40px rgba(0,0,0,0.7);
+    }
+
+    /* ── Controles de navegación ── */
+    .analysis-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .nav-btn {
+      padding: 6px 12px;
+      background: var(--bg-raised);
+      color: var(--cream-dim);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--cream); }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .nav-pos {
+      font-family: var(--ff-mono);
+      font-size: 0.75rem;
+      color: var(--cream-dim);
+      min-width: 60px;
+      text-align: center;
+    }
+    .btn-flip {
+      margin-left: auto;
+      color: var(--gold);
+      border-color: var(--gold-dim);
+      font-size: 0.78rem;
+    }
+    .btn-flip:hover { background: var(--gold-glow); color: var(--gold-light); }
+
+    /* ── Panel derecho ── */
+    .analysis-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding-top: 0;
+    }
+
+    .panel-title {
+      font-family: var(--ff-head);
+      font-size: 1.4rem;
+      color: var(--gold);
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── Controles Stockfish ── */
+    .sf-controls {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .sf-control-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 80px;
+    }
+
+    .sf-label {
+      font-family: var(--ff-mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--cream-dim);
+    }
+
+    .sf-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .sf-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      background: var(--gold);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .sf-value {
+      font-family: var(--ff-mono);
+      font-size: 0.85rem;
+      color: var(--gold);
+      min-width: 24px;
+      text-align: right;
+    }
+
+    /* ── Estado del análisis ── */
+    .sf-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--ff-mono);
+      font-size: 0.78rem;
+      color: var(--cream-dim);
+      padding: 8px 14px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .sf-spinner {
+      width: 12px; height: 12px;
+      border: 2px solid var(--border-mid);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    .sf-spinner.hidden { display: none; }
+
+    /* ── Líneas de análisis ── */
+    .analysis-lines {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .line-header {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 10px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+    }
+    .line-header span {
+      font-family: var(--ff-mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--cream-dim);
+    }
+
+    .analysis-line {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 10px;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .analysis-line:last-child { border-bottom: none; }
+    .analysis-line:hover { background: var(--bg-raised); }
+    .analysis-line.line-best { border-left: 3px solid var(--gold); }
+    .analysis-line.line-good { border-left: 3px solid var(--success); }
+    .analysis-line.line-neutral { border-left: 3px solid var(--cream-dim); }
+    .analysis-line.line-bad { border-left: 3px solid var(--fail); }
+
+    .line-score {
+      font-family: var(--ff-mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      align-self: center;
+    }
+    .line-score.pos { color: var(--success); }
+    .line-score.neg { color: var(--fail); }
+    .line-score.mate { color: var(--gold); }
+
+    .line-moves {
+      font-family: var(--ff-mono);
+      font-size: 0.82rem;
+      color: var(--cream-mid);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .line-moves .first-move {
+      color: var(--cream);
+      font-weight: 600;
+    }
+
+    /* ── FEN display ── */
+    .fen-display {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-family: var(--ff-mono);
+      font-size: 0.72rem;
+      color: var(--cream-dim);
+      word-break: break-all;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .fen-display:hover { border-color: var(--border-mid); color: var(--cream); }
+
+    /* ── Input FEN manual ── */
+    .fen-input-row {
+      display: flex; gap: 8px;
+    }
+    .fen-input {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--bg-deep);
+      color: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--ff-mono);
+      font-size: 0.75rem;
+      outline: none;
+    }
+    .fen-input:focus { border-color: var(--gold); }
+    .fen-input::placeholder { color: var(--cream-dim); opacity: 0.5; }
+
+    /* Historial de posiciones */
+    .pos-history {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    .pos-pill {
+      font-family: var(--ff-mono);
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--cream-dim);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .pos-pill:hover, .pos-pill.active {
+      background: var(--gold-glow);
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+  </style>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="https://unpkg.com/chess.js@0.10.3/chess.js"></script>
+</head>
+<body>
+
+  <header id="site-header">
+    <div class="header-logo">🔍 Tablero de Análisis</div>
+    <div style="font-family:var(--ff-mono);font-size:0.78rem;color:var(--cream-dim);" id="depth-indicator">depth —</div>
+  </header>
+
+  <div class="analysis-layout">
+
+    <!-- Columna izquierda: tablero -->
+    <div>
+      <div id="board-analysis-wrapper">
+        <div id="board-analysis"></div>
+      </div>
+
+      <div class="analysis-nav">
+        <button class="nav-btn" id="btn-start"  onclick="navStart()" title="Inicio">⏮</button>
+        <button class="nav-btn" id="btn-prev"   onclick="navPrev()"  title="Anterior">◀</button>
+        <span   class="nav-pos" id="nav-pos">—</span>
+        <button class="nav-btn" id="btn-next"   onclick="navNext()"  title="Siguiente">▶</button>
+        <button class="nav-btn" id="btn-end"    onclick="navEnd()"   title="Última">⏭</button>
+        <button class="nav-btn btn-flip" onclick="flipBoard()">⇅ Girar</button>
+      </div>
+    </div>
+
+    <!-- Columna derecha: panel de análisis -->
+    <div class="analysis-panel">
+
+      <div class="panel-title">
+        <span>⚙</span>
+        <span>Stockfish</span>
+      </div>
+
+      <!-- Controles -->
+      <div class="sf-controls">
+        <div class="sf-control-item">
+          <span class="sf-label">Profundidad</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="range" class="sf-slider" id="depth-slider"
+                   min="8" max="28" value="18"
+                   oninput="onControlChange()">
+            <span class="sf-value" id="depth-val">18</span>
+          </div>
+        </div>
+        <div class="sf-control-item">
+          <span class="sf-label">Líneas</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="range" class="sf-slider" id="lines-slider"
+                   min="1" max="5" value="3"
+                   oninput="onControlChange()">
+            <span class="sf-value" id="lines-val">3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado -->
+      <div class="sf-status">
+        <div class="sf-spinner hidden" id="spinner"></div>
+        <span id="sf-status-text">Conectando…</span>
+      </div>
+
+      <!-- Líneas de análisis -->
+      <div class="analysis-lines" id="analysis-lines">
+        <div class="line-header">
+          <span>Score</span>
+          <span>Línea de jugadas</span>
+        </div>
+        <div style="padding:16px;color:var(--cream-dim);font-family:var(--ff-mono);font-size:0.82rem;">
+          Esperando análisis…
+        </div>
+      </div>
+
+      <!-- FEN actual -->
+      <div>
+        <div style="font-family:var(--ff-mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cream-dim);margin-bottom:4px;">
+          FEN actual · clic para copiar
+        </div>
+        <div class="fen-display" id="fen-display" onclick="copyFen()">—</div>
+      </div>
+
+      <!-- Cargar FEN manual -->
+      <div>
+        <div style="font-family:var(--ff-mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cream-dim);margin-bottom:4px;">
+          Pegar FEN
+        </div>
+        <div class="fen-input-row">
+          <input type="text" class="fen-input" id="fen-input"
+                 placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                 onkeydown="if(event.key==='Enter') loadFenFromInput()">
+          <button class="btn-control btn-hint" onclick="loadFenFromInput()">Cargar</button>
+        </div>
+      </div>
+
+      <!-- Historial de posiciones de esta sesión -->
+      <div>
+        <div style="font-family:var(--ff-mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--cream-dim);margin-bottom:4px;">
+          Posiciones de la sesión
+        </div>
+        <div class="pos-history" id="pos-history"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ── Estado ────────────────────────────────────────────────────
+    let board    = null;
+    let game     = new Chess();
+    let ws       = null;
+    let wsReady  = false;
+    let analyzeTimer = null;   // debounce para no lanzar análisis en cada keypress
+    let orientation  = 'white';
+    let posHistory   = [];     // historial de FENs de esta sesión
+    let posIndex     = -1;     // índice actual en el historial (-1 = última)
+
+    // ── Init ──────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      // Leer FEN de la URL si lo hay
+      const params = new URLSearchParams(location.search);
+      const initialFen = params.get('fen') || null;
+
+      board = Chessboard('board-analysis', {
+        draggable: true,
+        position: initialFen || 'start',
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd,
+        pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
+      });
+
+      if (initialFen) {
+        try { game.load(initialFen); } catch {}
+      }
+
+      addToHistory(game.fen());
+      updateFenDisplay();
+      connectWs();
+    });
+
+    // ── WebSocket ─────────────────────────────────────────────────
+    function connectWs() {
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${protocol}://${location.host}/ws/analysis`);
+
+      ws.onopen = () => {
+        wsReady = true;
+        setStatus('Listo', false);
+        requestAnalysis();
+      };
+      ws.onclose = () => {
+        wsReady = false;
+        setStatus('Desconectado — recargando…', false);
+        setTimeout(connectWs, 2000);
+      };
+      ws.onerror = () => setStatus('Error de conexión', false);
+
+      ws.onmessage = ({ data }) => {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.error) { setStatus('Error: ' + msg.error, false); return; }
+          if (msg.analyzing) { setStatus('Analizando…', true); return; }
+          renderLines(msg.lines, msg.depth);
+          document.getElementById('depth-indicator').textContent =
+            `depth ${msg.depth}`;
+          setStatus(`Profundidad ${msg.depth} · ${msg.lines.length} líneas`, false);
+        } catch {}
+      };
+    }
+
+    // ── Tablero ───────────────────────────────────────────────────
+    function onDrop(source, target) {
+      const move = game.move({ from: source, to: target, promotion: 'q' });
+      if (!move) return 'snapback';
+      return null;
+    }
+
+    function onSnapEnd() {
+      board.position(game.fen());
+      addToHistory(game.fen());
+      updateFenDisplay();
+      scheduleAnalysis();
+    }
+
+    function flipBoard() {
+      orientation = orientation === 'white' ? 'black' : 'white';
+      board.flip();
+    }
+
+    // ── Navegación historial ──────────────────────────────────────
+    function addToHistory(fen) {
+      // Si estamos en medio del historial, truncar hacia adelante
+      if (posIndex !== -1 && posIndex < posHistory.length - 1) {
+        posHistory = posHistory.slice(0, posIndex + 1);
+      }
+      posHistory.push(fen);
+      posIndex = posHistory.length - 1;
+      renderHistory();
+      updateNavButtons();
+    }
+
+    function navStart() {
+      if (posHistory.length === 0) return;
+      posIndex = 0;
+      jumpToPos(posIndex);
+    }
+    function navPrev() {
+      if (posIndex <= 0) return;
+      posIndex--;
+      jumpToPos(posIndex);
+    }
+    function navNext() {
+      if (posIndex >= posHistory.length - 1) return;
+      posIndex++;
+      jumpToPos(posIndex);
+    }
+    function navEnd() {
+      posIndex = posHistory.length - 1;
+      jumpToPos(posIndex);
+    }
+
+    function jumpToPos(idx) {
+      const fen = posHistory[idx];
+      if (!fen) return;
+      try { game.load(fen); } catch { return; }
+      board.position(fen, false);
+      updateFenDisplay();
+      updateNavButtons();
+      renderHistory();
+      scheduleAnalysis();
+    }
+
+    function updateNavButtons() {
+      const atStart = posIndex <= 0;
+      const atEnd   = posIndex >= posHistory.length - 1;
+      document.getElementById('btn-start').disabled = atStart;
+      document.getElementById('btn-prev').disabled  = atStart;
+      document.getElementById('btn-next').disabled  = atEnd;
+      document.getElementById('btn-end').disabled   = atEnd;
+      const total = posHistory.length;
+      document.getElementById('nav-pos').textContent =
+        total > 0 ? `${posIndex + 1}/${total}` : '—';
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('pos-history');
+      container.innerHTML = posHistory.map((fen, i) => {
+        const active = i === posIndex ? ' active' : '';
+        const label  = i === 0 ? 'Inicio' : `Pos ${i}`;
+        return `<span class="pos-pill${active}" onclick="jumpToPos(${i})">${label}</span>`;
+      }).join('');
+    }
+
+    // ── FEN ───────────────────────────────────────────────────────
+    function updateFenDisplay() {
+      const el = document.getElementById('fen-display');
+      if (el) el.textContent = game.fen();
+    }
+
+    function copyFen() {
+      navigator.clipboard.writeText(game.fen()).then(() => {
+        const el = document.getElementById('fen-display');
+        const orig = el.textContent;
+        el.textContent = '✓ Copiado';
+        setTimeout(() => { el.textContent = orig; }, 1200);
+      });
+    }
+
+    function loadFenFromInput() {
+      const input = document.getElementById('fen-input');
+      const fen   = input.value.trim();
+      if (!fen) return;
+      try {
+        const test = new Chess(fen);
+        game.load(fen);
+        board.position(fen, false);
+        addToHistory(fen);
+        updateFenDisplay();
+        scheduleAnalysis();
+        input.value = '';
+        input.style.borderColor = '';
+      } catch {
+        input.style.borderColor = 'var(--fail)';
+        setTimeout(() => { input.style.borderColor = ''; }, 1500);
+      }
+    }
+
+    // ── Análisis ──────────────────────────────────────────────────
+    function onControlChange() {
+      document.getElementById('depth-val').textContent =
+        document.getElementById('depth-slider').value;
+      document.getElementById('lines-val').textContent =
+        document.getElementById('lines-slider').value;
+      scheduleAnalysis();
+    }
+
+    function scheduleAnalysis(delay = 300) {
+      if (analyzeTimer) clearTimeout(analyzeTimer);
+      analyzeTimer = setTimeout(requestAnalysis, delay);
+    }
+
+    function requestAnalysis() {
+      if (!wsReady || ws.readyState !== WebSocket.OPEN) return;
+      const depth = parseInt(document.getElementById('depth-slider').value);
+      const lines = parseInt(document.getElementById('lines-slider').value);
+      ws.send(JSON.stringify({ fen: game.fen(), depth, lines }));
+    }
+
+    // ── Renderizar líneas ─────────────────────────────────────────
+    function renderLines(lines, depth) {
+      const container = document.getElementById('analysis-lines');
+      if (!lines || lines.length === 0) {
+        container.innerHTML = `
+          <div class="line-header"><span>Score</span><span>Línea de jugadas</span></div>
+          <div style="padding:16px;color:var(--cream-dim);font-family:var(--ff-mono);font-size:0.82rem;">Sin análisis disponible</div>`;
+        return;
+      }
+
+      let html = `<div class="line-header"><span>Score</span><span>Línea de jugadas</span></div>`;
+
+      lines.forEach((line, i) => {
+        const score     = line.score || '?';
+        const moves     = line.moves || '';
+        const moveList  = moves.split(' ');
+        const firstMove = moveList[0] || '';
+        const rest      = moveList.slice(1).join(' ');
+
+        // Clase de color según score
+        const num = parseFloat(score);
+        let lineClass = 'line-neutral';
+        if (i === 0) lineClass = 'line-best';
+        else if (!isNaN(num) && num >= 0.5) lineClass = 'line-good';
+        else if (!isNaN(num) && num <= -0.5) lineClass = 'line-bad';
+
+        // Score: color
+        let scoreClass = 'pos';
+        if (score.startsWith('-')) scoreClass = 'neg';
+        else if (score.startsWith('M') || score.startsWith('-M')) scoreClass = 'mate';
+
+        html += `
+          <div class="analysis-line ${lineClass}">
+            <div class="line-score ${scoreClass}">${score}</div>
+            <div class="line-moves">
+              <span class="first-move">${firstMove}</span>${rest ? ' ' + rest : ''}
+            </div>
+          </div>`;
+      });
+
+      container.innerHTML = html;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────
+    function setStatus(text, spinning) {
+      document.getElementById('sf-status-text').textContent = text;
+      const sp = document.getElementById('spinner');
+      if (spinning) sp.classList.remove('hidden');
+      else sp.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

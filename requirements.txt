@@ -1,0 +1,6 @@
+python-dotenv
+fastapi
+uvicorn[standard]
+python-chess
+firebase-admin
+websockets
