@@ -7,7 +7,9 @@ echo Chess Trainer - Modo Local (Windows)
 echo ====================================
 echo.
 
-REM Crear entorno virtual si no existe
+REM ===============================
+REM 1. ENTORNO VIRTUAL
+REM ===============================
 if not exist venv (
     echo Creando entorno virtual...
     python -m venv venv
@@ -18,56 +20,119 @@ if not exist venv (
     )
 )
 
-REM Activar entorno virtual
 echo Activando entorno virtual...
 call venv\Scripts\activate.bat
 
-REM Instalar dependencias
+REM ===============================
+REM 2. DEPENDENCIAS
+REM ===============================
 echo Instalando dependencias...
-pip install -r requirements.txt 
+pip install -r requirements.txt
 if errorlevel 1 (
-    echo ERROR: No se pudieron instalar las dependencias
+    echo ERROR: Fallo instalando dependencias
     pause
     exit /b 1
 )
 
 REM ===============================
-REM STOCKFISH AUTO-INSTALL
+REM 3. STOCKFISH AUTO (ROBUSTO)
 REM ===============================
 
+set STOCKFISH_EXE=stockfish.exe
 set STOCKFISH_DIR=stockfish
-set STOCKFISH_EXE=%STOCKFISH_DIR%\stockfish.exe
+set STOCKFISH_ZIP=stockfish.zip
 
-if not exist %STOCKFISH_EXE% (
-    echo.
-    echo Stockfish no encontrado. Descargando...
+echo.
+echo [1/5] Verificando Stockfish...
 
-    if not exist %STOCKFISH_DIR% mkdir %STOCKFISH_DIR%
+REM -------------------------------
+REM CASO 1: EXE EN RAÍZ
+REM -------------------------------
+if exist %STOCKFISH_EXE% (
+    echo OK: Stockfish encontrado en raiz.
+    goto STOCKFISH_DONE
+)
 
-    powershell -Command ^
-    "Invoke-WebRequest -Uri 'https://stockfishchess.org/files/stockfish_16.1_win_x64_avx2.zip' -OutFile 'stockfish.zip'"
+REM -------------------------------
+REM CASO 2: CARPETA EXISTE
+REM -------------------------------
+if exist %STOCKFISH_DIR%\ (
+    echo Carpeta stockfish detectada. Buscando ejecutable...
 
-    echo Descomprimiendo Stockfish...
-
-    powershell -Command ^
-    "Expand-Archive -Path 'stockfish.zip' -DestinationPath '%STOCKFISH_DIR%' -Force"
-
-    del stockfish.zip
-
-    REM Mover exe si está dentro de subcarpeta
     for /r %STOCKFISH_DIR% %%i in (*.exe) do (
-        copy "%%i" "%STOCKFISH_EXE%" >nul
+        echo Copiando %%i a raiz...
+        copy /Y "%%i" "%STOCKFISH_EXE%" >nul
+        goto STOCKFISH_DONE
     )
 
-    echo Stockfish instalado correctamente.
-) else (
-    echo Stockfish ya está instalado.
+    echo No se encontro exe en la carpeta stockfish.
 )
+
+REM -------------------------------
+REM CASO 3: DESCARGAR
+REM -------------------------------
+echo [2/5] Stockfish no encontrado. Descargando...
+
+if exist %STOCKFISH_ZIP% del /q %STOCKFISH_ZIP%
+if exist %STOCKFISH_DIR% rd /s /q %STOCKFISH_DIR%
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+"Invoke-WebRequest -Uri 'https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-windows-x86-64-avx2.zip' -OutFile '%STOCKFISH_ZIP%'"
+
+REM -------------------------------
+REM VALIDAR DESCARGA
+REM -------------------------------
+if not exist %STOCKFISH_ZIP% (
+    echo ERROR: No se descargo Stockfish.
+    pause
+    exit /b 1
+)
+
+for %%A in (%STOCKFISH_ZIP%) do (
+    if %%~zA LSS 100000 (
+        echo ERROR: ZIP corrupto o incompleto.
+        del /q %STOCKFISH_ZIP%
+        pause
+        exit /b 1
+    )
+)
+
+echo [3/5] Extrayendo Stockfish...
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+"Expand-Archive -Force '%STOCKFISH_ZIP%' '%STOCKFISH_DIR%'"
+
+REM -------------------------------
+REM BUSCAR EXE
+REM -------------------------------
+echo [4/5] Buscando ejecutable...
+
+set FOUND=0
+
+for /r %STOCKFISH_DIR% %%i in (*.exe) do (
+    echo Copiando %%i a raiz...
+    copy /Y "%%i" "%STOCKFISH_EXE%" >nul
+    set FOUND=1
+    goto STOCKFISH_DONE
+)
+
+if %FOUND%==0 (
+    echo ERROR: No se encontro stockfish.exe dentro del zip.
+    pause
+    exit /b 1
+)
+
+:STOCKFISH_DONE
+echo OK: Stockfish listo.
+
+REM ===============================
+REM 4. INICIAR SERVIDOR
+REM ===============================
 
 echo.
 echo ====================================
 echo Iniciando servidor...
-echo Abre http://localhost:8000 en tu navegador
+echo Abre http://localhost:8000
 echo ====================================
 echo.
 

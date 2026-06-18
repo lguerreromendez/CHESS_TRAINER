@@ -5,7 +5,7 @@ Versión local completamente autónoma sin servidores. **Descárgalo y juega sin
 ## Requisitos
 
 - **Python 3.8+** (recomendado 3.10+)
-- **Stockfish** (motor de ajedrez - incluido en el paquete para Windows)
+- **Stockfish**  https://stockfishchess.org/download/
 
 ## Instalación rápida
 
@@ -30,8 +30,14 @@ Versión local completamente autónoma sin servidores. **Descárgalo y juega sin
 
 4. **Ejecutar**
    ```
-   python main.py
+   run.bat
    ```
+
+   > Si `stockfish.exe` no existe, `run.bat` hará lo siguiente:
+   > - buscará `stockfish.exe` en el proyecto
+   > - si encuentra `stockfish-windows-x86-64-avx2.exe`, lo copiará a `stockfish.exe`
+   > - si encuentra `stockfish.zip`, lo descomprimirá y extraerá el ejecutable
+   > - si no encuentra nada, intentará descargar Stockfish automáticamente
 
 5. **Abrir en navegador**
    - Ve a `http://localhost:8000` en tu navegador

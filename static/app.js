@@ -25,13 +25,18 @@ function resetLocalCounters() {
 
 function maybeCountLocalFeedback(text) {
   const normalized = text.toLowerCase();
+  console.log('[CONTADOR]', 'text:', text, 'normalized:', normalized);
   if (normalized.includes('perfecto') || normalized.includes('acertado con gm')) {
     gm_hits += 1;
+    console.log('[CONTADOR] GM HIT:', gm_hits);
   } else if (normalized.includes('mejor del módulo') || normalized.includes('casi perfecta') || normalized.includes('muy cercana') || normalized.includes('aceptable')) {
     module_hits += 1;
+    console.log('[CONTADOR] ENGINE HIT:', module_hits);
   } else if (normalized.includes('demasiado inferior') || normalized.includes('fallaste')) {
     misses += 1;
+    console.log('[CONTADOR] MISS:', misses);
   } else {
+    console.log('[CONTADOR] NO MATCH');
     return;
   }
   updateLocalCounters();
