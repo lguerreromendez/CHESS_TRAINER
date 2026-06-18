@@ -7,6 +7,36 @@ let ws    = null;
 let gm_hits = 0, module_hits = 0, misses = 0;
 let enginePanelTimer = null;
 
+function updateLocalCounters() {
+  const gmEl     = document.getElementById('gm-count');
+  const engineEl = document.getElementById('engine-count');
+  const missEl   = document.getElementById('misses-count');
+  if (gmEl)     gmEl.textContent     = gm_hits;
+  if (engineEl) engineEl.textContent = module_hits;
+  if (missEl)   missEl.textContent   = misses;
+}
+
+function resetLocalCounters() {
+  gm_hits = 0;
+  module_hits = 0;
+  misses = 0;
+  updateLocalCounters();
+}
+
+function maybeCountLocalFeedback(text) {
+  const normalized = text.toLowerCase();
+  if (normalized.includes('perfecto') || normalized.includes('acertado con gm')) {
+    gm_hits += 1;
+  } else if (normalized.includes('mejor del módulo') || normalized.includes('casi perfecta') || normalized.includes('muy cercana') || normalized.includes('aceptable')) {
+    module_hits += 1;
+  } else if (normalized.includes('demasiado inferior') || normalized.includes('fallaste')) {
+    misses += 1;
+  } else {
+    return;
+  }
+  updateLocalCounters();
+}
+
 // ── Navegación del tablero ────────────────────────────────────
 let fenHistory    = [];   // local: FENs en orden
 let viewIndex     = -1;
@@ -142,6 +172,7 @@ function initLocalMode() {
       }
 
       renderFeedbackLocal(type, text, points, top3_str);
+      maybeCountLocalFeedback(text);
       if (top3_str) showEnginePanel(top3_str);
     }
     else if (msg.startsWith("game_progress:")) {
@@ -880,10 +911,14 @@ function showSummaryModal(summary) {
     gradeEl.className   = `summary-grade grade-${grade}`;
   }
   document.getElementById('summary-score').textContent = `${score} pts`;
-  document.getElementById('ss-gm').textContent         = gmHits;
-  document.getElementById('ss-eng').textContent        = engHits;
-  document.getElementById('ss-miss').textContent       = misses;
-  document.getElementById('ss-pct').textContent        = pct + '%';
+  const gmEl   = document.getElementById('summary-gm-hits');
+  const engEl  = document.getElementById('summary-engine-hits');
+  const missEl = document.getElementById('summary-misses');
+  const pctEl  = document.getElementById('summary-pct');
+  if (gmEl)   gmEl.textContent   = gmHits;
+  if (engEl)  engEl.textContent  = engHits;
+  if (missEl) missEl.textContent = misses;
+  if (pctEl)  pctEl.textContent  = pct + '%';
 
   const bestEl = document.getElementById('summary-best');
   const moveEl = document.getElementById('sb-move');
@@ -1277,6 +1312,7 @@ function resetBoard() {
   updateNavBar();
   hideGameProgress('local');
   closeSummary();
+  resetLocalCounters();
   setBoardLocked(true);
   setStatus("📋 Pega un PGN para empezar", "local");
   wsSend("reset");
