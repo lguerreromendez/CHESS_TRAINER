@@ -14,8 +14,8 @@ _analysis_executor = ThreadPoolExecutor(max_workers=1)
 
 async def handle_local_mode(ws, firebase_user):
     game = LocalMode(auto_load=False)   # sin cargar partida por defecto
-    player = Player(ws, name=firebase_user.email)
-    player.uid = firebase_user.uid
+    player = Player(ws, name="Jugador Local")
+    player.uid = "local"
 
     await _send_empty_state(ws)
 

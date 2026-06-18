@@ -2,7 +2,7 @@
 serviceAccountKey.json
 .env
 
-# Stockfish fuente y binarios (se instala en el servidor)
+# Stockfish fuente y binarios (se instala localmente)
 stockfish/
 stockfish.exe
 
@@ -14,8 +14,12 @@ venv/
 env/
 .venv/
 
-# Archivos temporales
+# Archivos temporales y de desarrollo
 estructura.txt
+*.pgn
+
+# Docker (no necesario para versión local)
+Dockerfile
 
 # Sistema
 .DS_Store

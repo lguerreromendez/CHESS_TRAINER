@@ -1,6 +1,4 @@
-python-dotenv
-fastapi
-uvicorn[standard]
-python-chess
-firebase-admin
-websockets
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-chess==1.999
+websockets==12.0

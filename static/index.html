@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chess Trainer</title>
+  <title>Chess Trainer · Local</title>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,121 +20,16 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://unpkg.com/chess.js@0.10.3/chess.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
   <!-- ═══════════════ CABECERA GLOBAL ═══════════════ -->
   <header id="site-header">
     <div class="header-logo">♟ Chess Trainer</div>
-    <div id="user-info" style="display:none;">
-      <span class="user-name" id="username">—</span>
-      <span class="user-score-badge">⭐ <span id="global-score">0</span></span>
-      <button class="btn-ghost" onclick="signOut()">Salir</button>
-    </div>
   </header>
 
-  <!-- ═══════════════ AUTH ═══════════════ -->
-  <div id="auth-screen">
-    <div id="auth-card">
-      <div class="auth-symbol">♞</div>
-      <h1 class="auth-title">Chess Trainer</h1>
-      <p class="auth-sub">Adivina las jugadas de los grandes maestros</p>
-      <div id="auth-buttons">
-        <button class="btn-primary" onclick="showAuthForm('signin')">Iniciar sesión</button>
-        <button class="btn-outline" onclick="showAuthForm('signup')">Crear cuenta</button>
-      </div>
-
-      <!-- Formulario login -->
-      <form id="form-signin" class="auth-form" style="display:none;" onsubmit="doSignIn(event)">
-        <h3 class="auth-form-title">Iniciar sesión</h3>
-        <input class="auth-input" type="email" id="signin-email" placeholder="Email" required autocomplete="email">
-        <input class="auth-input" type="password" id="signin-password" placeholder="Contraseña" required autocomplete="current-password">
-        <div id="signin-error" class="auth-error"></div>
-        <button class="btn-primary" type="submit" style="width:100%">Entrar</button>
-        <button class="btn-ghost" type="button" onclick="showAuthForm(null)" style="width:100%;margin-top:8px">← Volver</button>
-      </form>
-
-      <!-- Formulario registro -->
-      <form id="form-signup" class="auth-form" style="display:none;" onsubmit="doSignUp(event)">
-        <h3 class="auth-form-title">Crear cuenta</h3>
-        <input class="auth-input" type="text"  id="signup-name"     placeholder="Nombre visible (nickname)" required autocomplete="nickname">
-        <input class="auth-input" type="email" id="signup-email"    placeholder="Email" required autocomplete="email">
-        <input class="auth-input" type="password" id="signup-pass"  placeholder="Contraseña (mín. 6 caracteres)" required minlength="6" autocomplete="new-password">
-        <div id="signup-error" class="auth-error"></div>
-        <button class="btn-primary" type="submit" style="width:100%">Crear cuenta</button>
-        <button class="btn-ghost" type="button" onclick="showAuthForm(null)" style="width:100%;margin-top:8px">← Volver</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ═══════════════ MENÚ ═══════════════ -->
-  <div id="menu" style="display:none;">
-    <div class="menu-card">
-      <h2 class="menu-title">Elige tu modo</h2>
-      <div class="menu-buttons">
-        <button class="mode-btn" onclick="startMode('local')">
-          <span class="mode-icon">♟</span>
-          <span class="mode-label">Modo Local</span>
-          <span class="mode-desc">Entrena a tu ritmo</span>
-        </button>
-        <button class="mode-btn" onclick="startMode('multiplayer_general')">
-          <span class="mode-icon">♜</span>
-          <span class="mode-label">Lobby General</span>
-          <span class="mode-desc">Compite con todos en tiempo real</span>
-        </button>
-        <button class="mode-btn" onclick="startMode('multiplayer_private')">
-          <span class="mode-icon">♞</span>
-          <span class="mode-label">Lobby Privado</span>
-          <span class="mode-desc">Crea o únete con código</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ LOBBY PRIVADO — SELECTOR ═══════════════ -->
-  <div id="lobby-selector" style="display:none;">
-    <div class="menu-card lobby-selector-card">
-      <h2 class="menu-title">Lobby Privado</h2>
-      <p class="menu-subtitle">Crea tu propio lobby o únete al de un amigo</p>
-
-      <div class="lobby-selector-grid">
-        <!-- Crear lobby -->
-        <div class="lobby-option-card">
-          <div class="lo-icon">✦</div>
-          <div class="lo-title">Crear lobby</div>
-          <div class="lo-desc">Tú controlas la partida, el tiempo y las jugadas. Comparte el código con tus amigos.</div>
-          <button class="btn-primary" onclick="createPrivateLobby()" style="width:100%;margin-top:auto;padding-top:16px">
-            Crear lobby
-          </button>
-        </div>
-
-        <!-- Unirse a lobby -->
-        <div class="lobby-option-card">
-          <div class="lo-icon">⤵</div>
-          <div class="lo-title">Unirse</div>
-          <div class="lo-desc">Introduce el código que te ha dado el creador del lobby</div>
-          <div class="lo-join">
-            <input id="join-code-input" class="join-input" type="text"
-                   maxlength="6" placeholder="Código · ej. AB3X7K"
-                   oninput="this.value=this.value.toUpperCase();document.getElementById('join-code-error').textContent=''"
-                   onkeydown="if(event.key==='Enter') joinPrivateLobby()">
-            <div id="join-code-error" class="auth-error" style="margin-top:6px;"></div>
-          </div>
-          <button class="btn-primary" onclick="joinPrivateLobby()" style="width:100%;margin-top:12px">
-            Unirse al lobby
-          </button>
-        </div>
-      </div>
-
-      <button class="btn-ghost" style="margin-top:24px;" onclick="hide('lobby-selector'); show('menu')">← Volver al menú</button>
-    </div>
-  </div>
-
   <!-- ═══════════════ MODO LOCAL ═══════════════ -->
-  <div id="local-ui" style="display:none;">
+  <div id="local-ui">
 
     <div class="game-layout">
 
@@ -151,8 +46,7 @@
           <button class="btn-control" onclick="resetBoard()" title="Nueva partida">↺ Reiniciar</button>
           <button class="btn-control btn-hint" onclick="suggestMove()" title="Ver sugerencias">💡 Pista</button>
           <button class="btn-control btn-pgn-toggle" onclick="togglePgnPanel()" id="btn-pgn-toggle">📋 Pegar PGN</button>
-          <button class="btn-control btn-analysis" onclick="openAnalysis()" title="Abrir tablero de análisis">🔍 Analizar</button>
-          <button class="btn-control btn-leave" onclick="leaveLocal()">✕ Salir</button>
+          <button class="btn-control btn-leave" onclick="location.reload()">↻ Recargar</button>
         </div>
 
         <!-- Barra de navegación del tablero -->
@@ -170,7 +64,7 @@
           <span class="gp-label" id="gp-label-local">0 / 0</span>
         </div>
 
-        <!-- Barra de progreso del análisis (fuera del panel, siempre visible) -->
+        <!-- Barra de progreso del análisis -->
         <div id="analysis-progress-local" class="analysis-progress" style="display:none;">
           <div class="ap-header">
             <span class="ap-spinner"></span>
@@ -236,7 +130,7 @@
           </div>
         </div>
 
-        <!-- Panel engine (oculto hasta que el jugador mueva) -->
+        <!-- Panel engine -->
         <div id="engine-panel-local" class="engine-panel">
           <div class="engine-panel-header">
             <span class="engine-icon">⚙</span>
@@ -256,242 +150,81 @@
           </div>
         </div>
 
-        <!-- Feedback principal -->
+        <!-- Panel de evaluación de movimiento (background eval) -->
+        <div id="bg-eval-local" class="bg-eval-panel" style="display:none;">
+          <span class="bge-title">Analizando tu jugada…</span>
+          <span class="bge-move" id="bge-move">—</span>
+          <span class="bge-score" id="bge-score">?</span>
+        </div>
+
+        <!-- Panel de estad -->
+        <div id="stats-panel" class="stats-panel">
+          <div class="stats-row">
+            <span class="stats-label">Aciertos (GM)</span>
+            <span class="stats-value" id="gm-count">0</span>
+          </div>
+          <div class="stats-row">
+            <span class="stats-label">Aciertos (Stockfish)</span>
+            <span class="stats-value" id="engine-count">0</span>
+          </div>
+          <div class="stats-row">
+            <span class="stats-label">Fallos</span>
+            <span class="stats-value" id="misses-count">0</span>
+          </div>
+        </div>
+
+        <!-- Retroalimentación (feedback) -->
         <div id="main-feedback-local" class="feedback-card" style="display:none;"></div>
-
-        <!-- Feedback secundario (gameover, etc.) -->
-        <div id="feedback-local" class="feedback-secondary"></div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ MODO MULTIJUGADOR ═══════════════ -->
-  <div id="multiplayer-ui" style="display:none;">
-
-    <div class="game-layout">
-
-      <!-- Columna izquierda: tablero -->
-      <div class="board-column">
-        <div class="board-header">
-          <span id="status-mp" class="turn-indicator">Conectando…</span>
-          <span class="score-pill">
-            <span id="my-score">0</span> pts
-            <span id="my-score-global" style="color:var(--cream-dim);font-size:0.8em;"></span>
-            &nbsp;·&nbsp;
-            <span id="player-count">1</span> jugadores
-          </span>
-        </div>
-        <div id="board-wrapper-mp">
-          <div id="board-mp"></div>
-        </div>
-        <div class="board-controls">
-          <button class="btn-control btn-leave" onclick="leaveMultiplayer()">✕ Salir del lobby</button>
-        </div>
-        <div id="countdown" class="countdown-bar"></div>
-
-        <!-- Barra de navegación (solo lobby privado, oculta por defecto) -->
-        <div id="nav-bar-mp" class="nav-bar" style="display:none;">
-          <button class="nav-btn" id="mp-nav-first"  onclick="mpNavFirst()"  title="Inicio">⏮</button>
-          <button class="nav-btn" id="mp-nav-prev"   onclick="mpNavPrev()"   title="Anterior">◀</button>
-          <span   class="nav-pos" id="mp-nav-pos">—</span>
-          <button class="nav-btn" id="mp-nav-next"   onclick="mpNavNext()"   title="Siguiente">▶</button>
-          <button class="nav-btn nav-live" id="mp-nav-last" onclick="mpNavLast()" title="Volver al juego">⏭ En vivo</button>
-        </div>
-
-        <!-- Barra de progreso de la partida -->
-        <div id="game-progress-mp" class="game-progress-bar" style="display:none;">
-          <div class="gp-track"><div class="gp-fill" id="gp-fill-mp" style="width:0%"></div></div>
-          <span class="gp-label" id="gp-label-mp">0 / 0</span>
-        </div>
-
-        <!-- Barra de progreso análisis en multiplayer -->
-        <div id="analysis-progress-mp" class="analysis-progress" style="display:none;">
-          <div class="ap-header">
-            <span class="ap-spinner"></span>
-            <span class="ap-text" id="ap-text-mp">Analizando…</span>
-            <span class="ap-count" id="ap-count-mp">0 / ?</span>
-          </div>
-          <div class="ap-track">
-            <div class="ap-bar" id="ap-bar-mp" style="width:0%"></div>
-          </div>
-        </div>
-
-        <!-- Controles del owner -->
-        <div id="owner-controls" class="owner-controls" style="display:none;">
-          <div class="owner-controls-title">♔ Controles del lobby</div>
-          <div class="owner-controls-btns">
-            <button class="btn-control btn-owner-start" id="btn-owner-start"
-                    onclick="ownerStart()">▶ Iniciar</button>
-            <button class="btn-control btn-owner-pause" id="btn-owner-pause"
-                    onclick="ownerPauseResume()">⏸ Pausar</button>
-            <button class="btn-control btn-owner-next"
-                    onclick="ownerAdvance()">⏭ Siguiente</button>
-            <button class="btn-control btn-pgn-toggle"
-                    onclick="ownerShowLoadPgn()" id="btn-owner-load">📋 Nueva partida</button>
-            <button class="btn-control btn-leave"
-                    onclick="ownerDeleteLobby()" style="margin-left:auto;">🗑 Cerrar lobby</button>
-          </div>
-          <!-- Tiempo por jugada -->
-          <div class="depth-row" style="margin-top:8px;">
-            <span class="depth-label">⏱ Segundos por jugada</span>
-            <div class="depth-controls">
-              <input type="range" id="time-slider-mp" class="depth-slider"
-                     min="5" max="60" value="10"
-                     oninput="document.getElementById('time-val-mp').textContent=this.value+'s'">
-              <span class="depth-val" id="time-val-mp">10s</span>
-              <button class="btn-control" onclick="ownerSetTime()" style="padding:4px 10px;font-size:0.75rem;">Aplicar</button>
-            </div>
-          </div>
-        </div>
       </div>
 
-      <!-- Columna derecha: info -->
-      <div class="info-column">
-
-        <!-- Lobby badge con código copiable -->
-        <div class="lobby-badge">
-          <span id="lobby-type-label">Lobby</span>:
-          <span id="lobby-id-display" class="lobby-id">—</span>
-          <button class="btn-copy" id="btn-copy-lobby" onclick="copyLobbyCode()" title="Copiar código" style="display:none;">📋</button>
-        </div>
-
-        <!-- Panel de carga PGN (solo visible para el owner del lobby privado) -->
-        <div id="owner-pgn-panel" class="pgn-paste-panel" style="display:none;">
-          <div class="pgn-paste-header">
-            <span class="pgn-paste-title">Cargar partida</span>
-            <span class="pgn-paste-hint">Pega el PGN para todos los jugadores</span>
-          </div>
-          <textarea id="mp-pgn-textarea" class="pgn-textarea"
-            placeholder='[Event "..."]&#10;[White "Magnus"]&#10;&#10;1. e4 e5 ...'
-            spellcheck="false"></textarea>
-          <div class="pgn-paste-actions">
-            <button class="btn-control btn-pgn-load" onclick="ownerLoadPgn()">⚙ Cargar para todos</button>
-          </div>
-          <!-- Selector de profundidad -->
-          <div class="depth-row">
-            <span class="depth-label">⚙ Profundidad Stockfish</span>
-            <div class="depth-controls">
-              <input type="range" id="depth-slider-mp" class="depth-slider"
-                     min="8" max="28" value="16"
-                     oninput="document.getElementById('depth-val-mp').textContent=this.value">
-              <span class="depth-val" id="depth-val-mp">16</span>
-            </div>
-            <span class="depth-hint" id="depth-hint-mp">Más profundidad = más lento</span>
-          </div>
-        </div>
-
-        <!-- Mensaje de espera para guests en lobby privado sin partida -->
-        <div id="lobby-waiting-msg" class="lobby-waiting" style="display:none;"></div>
-
-        <!-- ── Info de la partida ── -->
-        <div id="game-info-mp" class="game-info-card">
-          <div class="gi-players">
-            <div class="gi-player gi-white">
-              <span class="gi-color-dot dot-white">♔</span>
-              <span class="gi-name" id="mp-gi-white-name">—</span>
-              <span class="gi-elo" id="mp-gi-white-elo"></span>
-            </div>
-            <div class="gi-vs">vs</div>
-            <div class="gi-player gi-black">
-              <span class="gi-color-dot dot-black">♚</span>
-              <span class="gi-name" id="mp-gi-black-name">—</span>
-              <span class="gi-elo" id="mp-gi-black-elo"></span>
-            </div>
-          </div>
-          <div class="gi-meta">
-            <div class="gi-opening" id="mp-gi-opening">—</div>
-            <div class="gi-tags" id="mp-gi-tags"></div>
-          </div>
-        </div>
-
-        <!-- Panel Stockfish top3 (aparece tras cada jugada, 10 s) -->
-        <div id="engine-panel-mp" class="engine-panel">
-          <div class="engine-panel-header">
-            <span class="engine-icon">⚙</span>
-            <span class="engine-title">Stockfish · Top 3</span>
-            <span class="engine-hint">tras tu jugada</span>
-          </div>
-          <div class="engine-moves">
-            <div class="engine-move-card rank-1" id="mp-eng-move-1">
-              <span class="eng-rank">#1</span><span class="eng-move">—</span>
-            </div>
-            <div class="engine-move-card rank-2" id="mp-eng-move-2">
-              <span class="eng-rank">#2</span><span class="eng-move">—</span>
-            </div>
-            <div class="engine-move-card rank-3" id="mp-eng-move-3">
-              <span class="eng-rank">#3</span><span class="eng-move">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Feedback principal -->
-        <div id="main-feedback" class="feedback-card" style="display:none;"></div>
-
-        <!-- Ranking -->
-        <div id="ranking" class="ranking-panel">
-          <div class="ranking-title">♛ Clasificación</div>
-          <table id="ranking-table"><tbody></tbody></table>
-        </div>
-
-        <!-- Chat (solo lobby privado) -->
-        <div id="chat-panel" class="chat-panel" style="display:none;">
-          <div class="chat-header">💬 Chat</div>
-          <div id="chat-messages" class="chat-messages"></div>
-          <div class="chat-input-row">
-            <input id="chat-input" class="chat-input" type="text"
-                   placeholder="Escribe un mensaje…" maxlength="200"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();sendChat();}">
-            <button class="btn-control" onclick="sendChat()" style="padding:6px 12px;">➤</button>
-          </div>
-        </div>
-
-        <div id="feedback-mp" class="feedback-secondary"></div>
-
-      </div>
     </div>
 
   </div>
 
-  <!-- ═══════════════ MODAL RESUMEN GRUPAL ═══════════════ -->
-  <div id="group-summary-modal" class="summary-modal" style="display:none;">
-    <div class="summary-card" style="max-width:480px;">
-      <div class="summary-grade grade-S" style="font-size:3rem;">🏁</div>
-      <div class="summary-title" style="font-size:1.2rem;margin-bottom:16px;">Resultados de la partida</div>
-      <div id="group-summary-table" class="group-table"></div>
-      <button class="btn-primary" onclick="closeGroupSummary()" style="margin-top:20px;width:100%;">Continuar</button>
-    </div>
-  </div>
-
-  <!-- ═══════════════ MODAL RESUMEN FINAL ═══════════════ -->
-  <div id="summary-modal" class="summary-modal" style="display:none;">
-    <div class="summary-card">
-      <div class="summary-grade" id="summary-grade">—</div>
-      <div class="summary-title">Partida completada</div>
-      <div class="summary-score" id="summary-score">0 pts</div>
-      <div class="summary-stats">
-        <div class="ss-item ss-gm">
-          <div class="ss-val" id="ss-gm">0</div>
-          <div class="ss-lbl">Con GM</div>
+  <!-- ══════════════ SUMMARY MODAL ══════════════ -->
+  <div id="summary-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">Resumen de partida</span>
+        <span class="modal-close" onclick="closeSummaryModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="summary-label">Puntuación final</div>
+            <div class="summary-value" id="summary-score">0</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Calificación</div>
+            <div class="summary-value" id="summary-grade">—</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Precisión</div>
+            <div class="summary-value" id="summary-pct">0%</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Movimientos</div>
+            <div class="summary-value" id="summary-total">0</div>
+          </div>
         </div>
-        <div class="ss-item ss-eng">
-          <div class="ss-val" id="ss-eng">0</div>
-          <div class="ss-lbl">Con módulo</div>
-        </div>
-        <div class="ss-item ss-miss">
-          <div class="ss-val" id="ss-miss">0</div>
-          <div class="ss-lbl">Fallos</div>
-        </div>
-        <div class="ss-item ss-pct">
-          <div class="ss-val" id="ss-pct">0%</div>
-          <div class="ss-lbl">Aciertos</div>
+        <div class="summary-details">
+          <div class="detail-row">
+            <span class="detail-label">Aciertos con el GM</span>
+            <span class="detail-value" id="summary-gm-hits">0</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Aciertos con el motor</span>
+            <span class="detail-value" id="summary-engine-hits">0</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Fallos</span>
+            <span class="detail-value" id="summary-misses">0</span>
+          </div>
         </div>
       </div>
-      <div class="summary-best" id="summary-best" style="display:none;">
-        <span class="sb-label">Mejor jugada</span>
-        <span class="sb-move" id="sb-move">—</span>
+      <div class="modal-footer">
+        <button class="btn-primary" onclick="closeSummaryModal(); resetBoard()">Jugar otra partida</button>
       </div>
-      <button class="btn-primary" onclick="closeSummary()" style="margin-top:20px;width:100%;">Continuar</button>
     </div>
   </div>
 

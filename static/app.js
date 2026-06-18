@@ -1,11 +1,8 @@
-// static/app.js
+// static/app.js - Chess Trainer LOCAL (sin Firebase, sin servidores)
 
 let board = null;
 let game  = null;
 let ws    = null;
-let currentUser   = null;
-let currentMode   = null;
-let currentLobbyId = null;
 
 let gm_hits = 0, module_hits = 0, misses = 0;
 let enginePanelTimer = null;
@@ -15,135 +12,26 @@ let fenHistory    = [];   // local: FENs en orden
 let viewIndex     = -1;
 let feedbackTimer = null;
 
-// ── Navegación tablero multijugador (solo lobby privado) ──────
-let mpFenHistory  = [];
-let mpViewIndex   = -1;
-let mpIsPrivate   = false;   // seteado al recibir lobby_type
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAh74MN66kAVnGGzAG-LyusMfgIyTPyEYI",
-  authDomain: "chessgm99.firebaseapp.com",
-  projectId: "chessgm99",
-  storageBucket: "chessgm99.firebasestorage.app",
-  messagingSenderId: "482528468216",
-  appId: "1:482528468216:web:c8afa6b261bdcf9c7c2f0d",
-  measurementId: "G-39FYNNPME2"
-};
-
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
-
-document.addEventListener('DOMContentLoaded', () => {
-  // Ocultar todo mientras Firebase comprueba si hay sesión guardada
-  hide('auth-screen'); hide('menu'); hide('local-ui');
-  hide('multiplayer-ui'); hide('lobby-selector'); hide('user-info');
-});
-
-// Firebase comprueba la sesión guardada automáticamente al cargar.
-// Si el usuario ya estaba autenticado (F5, recargar), llama a afterLoginSuccess
-// directamente sin pedir credenciales de nuevo.
-auth.onAuthStateChanged(user => {
-  if (user) {
-    currentUser = user;
-    afterLoginSuccess();
-  } else {
-    // No hay sesión — mostrar pantalla de login
-    show('auth-screen');
-    hide('menu'); hide('local-ui'); hide('multiplayer-ui');
-    hide('lobby-selector'); hide('user-info');
-  }
-});
-
 // ── helpers ─────────────────────────────────────────────────
 function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
 function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
 
-// ── Auth ─────────────────────────────────────────────────────
-
-function showAuthForm(type) {
-  document.getElementById('auth-buttons').style.display  = type ? 'none' : 'flex';
-  document.getElementById('form-signin').style.display   = type === 'signin' ? 'flex' : 'none';
-  document.getElementById('form-signup').style.display   = type === 'signup' ? 'flex' : 'none';
-}
-
-function doSignIn(e) {
-  e.preventDefault();
-  const email    = document.getElementById('signin-email').value.trim();
-  const password = document.getElementById('signin-password').value;
-  const errEl    = document.getElementById('signin-error');
-  errEl.textContent = '';
-  auth.signInWithEmailAndPassword(email, password)
-    .then(({ user }) => { currentUser = user; afterLoginSuccess(); })
-    .catch(err => { errEl.textContent = _authError(err.code); });
-}
-
-function doSignUp(e) {
-  e.preventDefault();
-  const name     = document.getElementById('signup-name').value.trim();
-  const email    = document.getElementById('signup-email').value.trim();
-  const password = document.getElementById('signup-pass').value;
-  const errEl    = document.getElementById('signup-error');
-  errEl.textContent = '';
-  if (!name) { errEl.textContent = 'El nombre es obligatorio'; return; }
-
-  auth.createUserWithEmailAndPassword(email, password)
-    .then(({ user }) => {
-      currentUser = user;
-      return user.updateProfile({ displayName: name })
-        .then(() => db.collection("users").doc(user.uid).set({
-          uid: user.uid, email: user.email, displayName: name,
-          globalScore: 0, localScore: 0,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-          gamesPlayed: 0
-        }));
-    })
-    .then(afterLoginSuccess)
-    .catch(err => { errEl.textContent = _authError(err.code); });
-}
-
-function _authError(code) {
-  const msgs = {
-    'auth/user-not-found':      'No existe una cuenta con ese email',
-    'auth/wrong-password':      'Contraseña incorrecta',
-    'auth/invalid-email':       'Email no válido',
-    'auth/email-already-in-use':'Este email ya está registrado',
-    'auth/weak-password':       'La contraseña es demasiado corta',
-    'auth/too-many-requests':   'Demasiados intentos. Espera un momento',
-    'auth/invalid-credential':  'Email o contraseña incorrectos',
-  };
-  return msgs[code] || 'Error al autenticar. Inténtalo de nuevo';
-}
-
-function signOut() {
-  auth.signOut().then(() => {
-    currentUser = null;
-    if (ws) ws.close();
-    location.reload();
-  }).catch(e => console.error(e));
-}
-
-function afterLoginSuccess() {
+// ── Inicio automático ────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Ocultar TODO menos local-ui
   hide('auth-screen');
-  show('user-info');
-  show('menu');
-  showAuthForm(null);
-  loadUserData();
-}
+  hide('menu');
+  hide('multiplayer-ui');
+  hide('lobby-selector');
+  hide('user-info');
+  
+  // Iniciar directamente en modo local
+  startLocalGame();
+});
 
-function loadUserData() {
-  if (!currentUser) return;
-  db.collection("users").doc(currentUser.uid).get().then(doc => {
-    if (doc.exists) {
-      const d = doc.data();
-      const name = d.displayName || currentUser.email.split('@')[0] || "Jugador";
-      document.getElementById("username").textContent    = name;
-      document.getElementById("global-score").textContent = d.globalScore || 0;
-    } else {
-      document.getElementById("username").textContent = currentUser.email;
-    }
-  });
+function startLocalGame() {
+  show('local-ui');
+  initLocalMode();
 }
 
 // ── Mode selection ────────────────────────────────────────────
@@ -201,14 +89,10 @@ function initLocalMode() {
   });
 
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${protocol}://${location.host}/ws?mode=local&uid=${currentUser.uid}`);
+  ws = new WebSocket(`${protocol}://${location.host}/ws`);
 
   ws.onopen = () => {
     setStatus("Conectado · Modo Local", "local");
-    ws.send(JSON.stringify({
-      type: "user_info", uid: currentUser.uid,
-      displayName: document.getElementById("username").textContent
-    }));
   };
   ws.onclose = () => setStatus("Desconectado", "local");
   ws.onerror = () => setStatus("Error de conexión", "local");
