@@ -2,10 +2,13 @@
 
 Versión local completamente autónoma sin servidores. **Descárgalo y juega sin conexión a internet.**
 
+# FORMA SENCILLA INSTALACION:
+DESCARGA ZIP, descomprime y ejecuta run.bat
+
 ## Requisitos
 
 - **Python 3.8+** (recomendado 3.10+)
-- **Stockfish**  https://stockfishchess.org/download/
+- **Stockfish**  https://stockfishchess.org/download/     poner en la carpeta principal con nombre stockfish.exe
 
 ## Instalación rápida
 
