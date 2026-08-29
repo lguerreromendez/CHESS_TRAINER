@@ -26,6 +26,7 @@ async def handle_multiplayer_mode(
         return
 
     lobby.add_player(player)
+    await _broadcast_lobby_members(lobby)
 
     is_private = getattr(lobby, "is_private", False)
     is_owner = is_private and lobby.owner_uid == player.uid
@@ -93,6 +94,7 @@ async def handle_multiplayer_mode(
                             "displayName", player.display_name
                         )
                         await lobby.broadcast(f"player_joined:{player.display_name}")
+                        await _broadcast_lobby_members(lobby)
                         await lobby.update_and_broadcast_scores()
                 except Exception as e:
                     print(f"[USER INFO ERROR] {e}")
@@ -191,6 +193,7 @@ async def handle_multiplayer_mode(
     except WebSocketDisconnect:
         lobby.remove_player(player)
         await lobby.broadcast(f"player_left:{player.display_name}")
+        await _broadcast_lobby_members(lobby)
         await lobby.update_and_broadcast_scores()
         print(f"[MP DISCONNECT] {player.display_name}")
 
@@ -205,8 +208,14 @@ async def handle_multiplayer_mode(
         print(f"[MP ERROR] {player.display_name}: {type(e).__name__}: {e}")
         try:
             lobby.remove_player(player)
+            await _broadcast_lobby_members(lobby)
         except Exception:
             pass
+
+
+async def _broadcast_lobby_members(lobby):
+    members = [p.display_name for p in lobby.players.values()]
+    await lobby.broadcast(f"lobby_members:{json.dumps(members)}")
 
 
 async def _send_current_state(ws, lobby):

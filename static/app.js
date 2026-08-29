@@ -4,6 +4,7 @@ let board = null;
 let game  = null;
 let ws    = null;
 let mpLiveGame = null;
+let lobbyMembers = [];
 
 let gm_hits = 0, module_hits = 0, misses = 0;
 let enginePanelTimer = null;
@@ -51,6 +52,41 @@ let feedbackTimer = null;
 // ── helpers ─────────────────────────────────────────────────
 function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
 function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
+function ensureLobbyMembersPanel() {
+  let panel = document.getElementById('lobby-members-panel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'lobby-members-panel';
+  panel.className = 'game-info-card lobby-members-panel';
+  panel.style.display = 'none';
+  panel.innerHTML = `
+    <div class="gi-meta">
+      <div class="gi-opening">Lobby privado</div>
+      <div class="gi-tags" id="lobby-members-count">0 unidos</div>
+    </div>
+    <div class="lobby-members-list" id="lobby-members-list"></div>
+  `;
+
+  const target = document.querySelector('#multiplayer-ui .info-column') || document.querySelector('.info-column') || document.body;
+  target.appendChild(panel);
+  return panel;
+}
+
+function renderLobbyMembers(names) {
+  lobbyMembers = Array.isArray(names) ? names : [];
+  const panel = ensureLobbyMembersPanel();
+  const countEl = document.getElementById('lobby-members-count');
+  const listEl = document.getElementById('lobby-members-list');
+  if (countEl) countEl.textContent = `${lobbyMembers.length} unidos`;
+  if (listEl) {
+    listEl.innerHTML = lobbyMembers.length
+      ? lobbyMembers.map(name => `<div class="lobby-member-item">${name}</div>`).join('')
+      : '<div class="lobby-member-empty">Aún no se ha unido nadie</div>';
+  }
+  panel.style.display = 'block';
+}
 
 function parseUciMove(uci) {
   const from = uci.slice(0, 2);
@@ -1136,6 +1172,13 @@ function initMultiplayer(lobbyId) {
       const name = msg.substring(12).trim();
       appendChatMessage('', `${name} ha salido del lobby`, true);
     }
+    else if (msg.startsWith("lobby_members:")) {
+      try {
+        renderLobbyMembers(JSON.parse(msg.substring(14)));
+      } catch {
+        renderLobbyMembers([]);
+      }
+    }
     else if (msg.startsWith("gm_move:"))     {
       const san = msg.substring(8).trim();
       const el  = document.getElementById("status-mp");
@@ -1355,6 +1398,7 @@ function leaveMultiplayer() {
   _removeMpKeyHandler();
   mpFenHistory = []; mpViewIndex = -1; mpIsPrivate = false;
   mpLiveGame = null;
+  lobbyMembers = [];
   closeGroupSummary(); closeSummary();
   hide('multiplayer-ui'); show('menu');
   currentLobbyId = null;
@@ -1371,6 +1415,8 @@ function leaveMultiplayer() {
   if (lbl) lbl.textContent = 'Lobby';
   const btn = document.getElementById("btn-copy-lobby");
   if (btn) btn.style.display = 'none';
+  const members = document.getElementById('lobby-members-panel');
+  if (members) members.remove();
 }
 
 // ── Common ────────────────────────────────────────────────────

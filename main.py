@@ -4,12 +4,16 @@ import sys
 import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from types import SimpleNamespace
 
-from fastapi import FastAPI, WebSocket
+from fastapi import Body, FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from core.lobby_manager import LobbyManager
 from modes.local_mode_handler import handle_local_mode
+from modes.multiplayer_mode_handler import handle_multiplayer_mode
+from modes.teacher_mode_handler import handle_teacher_mode
 
 # =====================================================
 # PATH BASE (DEV + PYINSTALLER)
@@ -60,6 +64,7 @@ def log_error(title, e):
 # FASTAPI APP
 # =====================================================
 app = FastAPI(title="Chess Trainer Local")
+lobby_manager = LobbyManager()
 
 
 # =====================================================
@@ -79,6 +84,7 @@ except Exception as e:
 # =====================================================
 @app.on_event("startup")
 async def startup_event():
+    lobby_manager.create_default_lobby()
     print("[STARTUP] Chess Trainer listo")
 
 
@@ -107,9 +113,51 @@ async def index():
 async def websocket_endpoint(ws: WebSocket):
     try:
         await ws.accept()
-        await handle_local_mode(ws, None)
+        mode = (ws.query_params.get("mode") or "local").lower()
+        uid = ws.query_params.get("uid") or ws.query_params.get("user_id") or "anon"
+        display_name = (
+            ws.query_params.get("display_name") or ws.query_params.get("name") or uid
+        )
+        email = ws.query_params.get("email") or f"{display_name}@local"
+        firebase_user = SimpleNamespace(uid=uid, email=email)
+
+        if mode == "multiplayer":
+            lobby_id = ws.query_params.get("lobby_id")
+            await handle_multiplayer_mode(ws, firebase_user, lobby_id, lobby_manager)
+        elif mode == "teacher":
+            lobby_id = ws.query_params.get("lobby_id")
+            await handle_teacher_mode(ws, firebase_user, lobby_id, lobby_manager)
+        else:
+            await handle_local_mode(ws, None)
     except Exception as e:
         log_error("WEBSOCKET ERROR", e)
+
+
+@app.post("/create_lobby")
+async def create_lobby(payload: dict = Body(...)):
+    owner_uid = payload.get("uid")
+    turn_seconds = int(payload.get("turn_seconds", 10))
+    if not owner_uid:
+        return {"error": "uid requerido"}
+
+    lobby = lobby_manager.create_private_lobby(owner_uid, turn_seconds=turn_seconds)
+    return {"lobby_id": lobby.id, "turn_seconds": lobby.turn_seconds}
+
+
+@app.get("/lobby/{lobby_id}/exists")
+async def lobby_exists(lobby_id: str):
+    lobby = lobby_manager.get_lobby(lobby_id)
+    return {"exists": bool(lobby)}
+
+
+@app.delete("/lobby/{lobby_id}")
+async def delete_lobby(lobby_id: str, payload: dict = Body(...)):
+    owner_uid = payload.get("uid")
+    if not owner_uid:
+        return {"error": "uid requerido"}
+
+    deleted = await lobby_manager.delete_lobby(lobby_id, owner_uid)
+    return {"deleted": deleted}
 
 
 # =====================================================

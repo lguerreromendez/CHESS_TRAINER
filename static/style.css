@@ -1575,6 +1575,31 @@ body {
   display: flex;
   flex-direction: column;
 }
+.lobby-members-panel {
+  position: sticky;
+  top: 88px;
+  z-index: 20;
+  margin-top: 12px;
+}
+.lobby-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.lobby-member-item,
+.lobby-member-empty {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--cream);
+  font-family: var(--ff-body);
+}
+.lobby-member-empty {
+  color: var(--cream-dim);
+  font-style: italic;
+}
 
 .chat-header {
   font-family: var(--ff-mono);
