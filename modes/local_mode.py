@@ -71,6 +71,9 @@ class LocalMode:
                 node = node.variation(0)
 
             temp_board = chess.Board()
+            # opening pieces: store first N half-moves with piece, from-square and san
+            # structure: { 'white': [ {piece, from, san}, ... ], 'black': [...] }
+            self._opening_pieces = { 'white': [], 'black': [] }
             node = game
             current = 0
 
@@ -93,6 +96,27 @@ class LocalMode:
                             mate_score=10000) or 0
                         best_info.append((uci, san, score))
                 self.stockfish_best.append(best_info)
+                # record piece that moved for opening summary (best-effort)
+                try:
+                    piece = temp_board.piece_at(move.from_square)
+                    symbol = piece.symbol().upper() if piece else None
+                except Exception:
+                    symbol = None
+                try:
+                    san_move = temp_board.san(move)
+                except Exception:
+                    san_move = None
+                if symbol:
+                    name_map = {'P':'Peón','N':'Caballo','B':'Alfil','R':'Torre','Q':'Dama','K':'Rey'}
+                    idx = len(self.pgn_moves) - 1
+                    who = 'white' if idx % 2 == 0 else 'black'
+                    if len(self._opening_pieces[who]) < 5:
+                        from_sq = chess.square_name(move.from_square) if hasattr(chess, 'square_name') else chess.SQUARE_NAMES[move.from_square]
+                        self._opening_pieces[who].append({
+                            'piece': name_map.get(symbol, symbol),
+                            'from': from_sq,
+                            'san': san_move or ''
+                        })
                 temp_board.push(move)
                 node = next_node
 
@@ -103,6 +127,51 @@ class LocalMode:
             print(f"[PGN] {len(self.pgn_moves)} jugadas (depth={self.depth})")
         except Exception as e:
             print(f"[PGN ERROR] {e}")
+
+    def get_opening_pieces(self, n: int = 5) -> dict:
+        """Devuelve las primeras `n` medias jugadas por blancas y negras como
+        listas de objetos: {'piece': 'Caballo', 'from': 'g1', 'san': 'Nf3'}.
+        """
+        # If already computed during analysis, pad and return
+        if hasattr(self, '_opening_pieces') and self._opening_pieces:
+            w = list(self._opening_pieces.get('white', []))
+            b = list(self._opening_pieces.get('black', []))
+            # pad with placeholders
+            while len(w) < n: w.append({'piece':'—','from':'','san':''})
+            while len(b) < n: b.append({'piece':'—','from':'','san':''})
+            return {'white': w[:n], 'black': b[:n]}
+
+        # Fallback: reconstruct from pgn_moves
+        temp_board = chess.Board()
+        w = []
+        b = []
+        name_map = {'P':'Peón','N':'Caballo','B':'Alfil','R':'Torre','Q':'Dama','K':'Rey'}
+        for idx, move in enumerate(self.pgn_moves):
+            try:
+                piece = temp_board.piece_at(move.from_square)
+                symbol = piece.symbol().upper() if piece else None
+            except Exception:
+                symbol = None
+            name = name_map.get(symbol, '—') if symbol else '—'
+            try:
+                from_sq = chess.square_name(move.from_square) if hasattr(chess, 'square_name') else chess.SQUARE_NAMES[move.from_square]
+            except Exception:
+                from_sq = ''
+            try:
+                san_move = temp_board.san(move)
+            except Exception:
+                san_move = ''
+            obj = {'piece': name, 'from': from_sq, 'san': san_move}
+            if idx % 2 == 0:
+                if len(w) < n: w.append(obj)
+            else:
+                if len(b) < n: b.append(obj)
+            temp_board.push(move)
+            if len(w) >= n and len(b) >= n:
+                break
+        while len(w) < n: w.append({'piece':'—','from':'','san':''})
+        while len(b) < n: b.append({'piece':'—','from':'','san':''})
+        return {'white': w, 'black': b}
 
     def get_top3_str(self, turn: int) -> str:
         if turn < len(self.stockfish_best) and self.stockfish_best[turn]:

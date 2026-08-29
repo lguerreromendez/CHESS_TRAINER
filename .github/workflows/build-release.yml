@@ -1,0 +1,59 @@
+name: Build and Release (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (overrides tag)'
+        required: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Determine tag and version
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "TAG_NAME=$TAG" >> $GITHUB_ENV
+            echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            V="${{ github.event.inputs.version }}"
+            if [[ "$V" == v* ]]; then
+              echo "TAG_NAME=$V" >> $GITHUB_ENV
+              echo "VERSION=${V#v}" >> $GITHUB_ENV
+            else
+              echo "TAG_NAME=v$V" >> $GITHUB_ENV
+              echo "VERSION=$V" >> $GITHUB_ENV
+            fi
+          else
+            echo "TAG_NAME=v0.0.0" >> $GITHUB_ENV
+            echo "VERSION=0.0.0" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies and build
+        run: |
+          pwsh -NoProfile -NonInteractive -Command "& './make_exe.ps1' -Version '${{ env.VERSION }}'"
+
+      - name: Create Release and upload artifacts
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            build/ChessTrainer-v${{ env.VERSION }}.exe
+            build/ChessTrainer-v${{ env.VERSION }}.exe.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
