@@ -60,8 +60,8 @@ class LobbyManager:
             await lobby.multi_game.cleanup()
         try:
             await lobby.broadcast("lobby_closed:El admin ha cerrado el lobby")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[LOBBY MANAGER] Error al notificar cierre del lobby: {e}")
         del self.lobbies[lobby_id]
         print(f"[LOBBY] Eliminado: {lobby_id}")
         return True

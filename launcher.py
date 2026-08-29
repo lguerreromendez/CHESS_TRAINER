@@ -1,4 +1,3 @@
-import sys
 import threading
 import time
 import tkinter as tk
@@ -49,7 +48,7 @@ def wait_for_server(url: str, timeout: float = 30.0) -> bool:
         try:
             urllib.request.urlopen(url, timeout=2)
             return True
-        except:
+        except Exception:
             time.sleep(0.5)
     return False
 
@@ -66,7 +65,8 @@ class LauncherApp:
             self.root.iconbitmap(
                 "C:\\Users\\luisg\\Desktop\\CHESS-TRAINER\\chesstrainer\\icon.ico"
             )  # 👈 tu icono aquí
-        except:
+        except Exception:
+            # no es crítico si falla establecer el icono en entornos sin ventana
             pass
 
         self.root.title("Chess Trainer")

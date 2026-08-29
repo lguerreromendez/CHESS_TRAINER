@@ -1,6 +1,3 @@
-from starlette.websockets import WebSocketDisconnect
-
-
 class Lobby:
     def __init__(self, lobby_id):
         self.id = lobby_id
@@ -30,7 +27,9 @@ class Lobby:
         for pid, p in list(self.players.items()):
             try:
                 await p.ws.send_text(message)
-            except Exception:
+            except Exception as e:
+                # marcar conexión muerta para limpieza posterior
+                print(f"[LOBBY {self.id}] Error enviando a {p.display_name}: {e}")
                 dead.append(pid)
         # Limpiar conexiones muertas detectadas durante el broadcast
         for pid in dead:

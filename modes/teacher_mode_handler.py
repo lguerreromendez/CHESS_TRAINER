@@ -2,7 +2,6 @@
 import asyncio
 import json
 
-import chess
 from fastapi import WebSocket, WebSocketDisconnect
 
 from core.player import Player
