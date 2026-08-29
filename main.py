@@ -1,13 +1,15 @@
+import logging
+import multiprocessing
 import sys
 import traceback
-import multiprocessing
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from modes.local_mode_handler import handle_local_mode
-
 
 # =====================================================
 # PATH BASE (DEV + PYINSTALLER)
@@ -20,20 +22,37 @@ else:
     RESOURCE_BASE = BASE_DIR
 
 
-LOG_FILE = BASE_DIR / "error.log"
+LOG_FILE = BASE_DIR / "logs" / "chesstrainer.log"
 
 
 # =====================================================
-# LOGGING SIMPLE Y FIABLE
+# LOGGING (RotatingFileHandler)
 # =====================================================
+def _setup_logging():
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger("chesstrainer")
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        fh = RotatingFileHandler(
+            str(LOG_FILE), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+        )
+        fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+        # also log to console
+        ch = logging.StreamHandler()
+        ch.setFormatter(fmt)
+        logger.addHandler(ch)
+    return logger
+
+
+logger = _setup_logging()
+
+
 def log_error(title, e):
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write("\n" + "=" * 80 + "\n")
-            f.write(f"[{title}]\n")
-            f.write(str(e) + "\n")
-            f.write(traceback.format_exc())
-    except:
+        logger.exception(f"{title}: {e}")
+    except Exception:
         pass
 
 
@@ -49,11 +68,7 @@ app = FastAPI(title="Chess Trainer Local")
 try:
     static_dir = RESOURCE_BASE / "static"
 
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(static_dir)),
-        name="static"
-    )
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 except Exception as e:
     log_error("STATIC ERROR", e)
@@ -102,12 +117,8 @@ async def websocket_endpoint(ws: WebSocket):
 # =====================================================
 def run_server():
     import uvicorn
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=8000,
-        log_level="info"
-    )
+
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
 
 
 # =====================================================

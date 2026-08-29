@@ -9,10 +9,12 @@ El servidor responde con líneas de análisis de Stockfish:
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
+
 import chess
 import chess.engine
-from concurrent.futures import ThreadPoolExecutor
 from fastapi import WebSocket, WebSocketDisconnect
+
 from core.stockfish_service import StockfishService
 
 # Executor dedicado al análisis en tiempo real (1 hilo — Stockfish no es thread-safe)
@@ -32,14 +34,12 @@ def _run_analysis(fen: str, depth: int, lines: int) -> list[dict]:
     if not _stockfish.engine:
         return []
 
-    depth  = max(1,  min(depth, 30))   # límites seguros
-    lines  = max(1,  min(lines, 5))
+    depth = max(1, min(depth, 30))  # límites seguros
+    lines = max(1, min(lines, 5))
 
     try:
         infos = _stockfish.engine.analyse(
-            board,
-            chess.engine.Limit(depth=depth),
-            multipv=lines
+            board, chess.engine.Limit(depth=depth), multipv=lines
         )
     except Exception as e:
         print(f"[ANALYSIS ERROR] {e}")
@@ -66,18 +66,20 @@ def _run_analysis(fen: str, depth: int, lines: int) -> list[dict]:
         # Convertir movimientos a SAN para que sean legibles
         san_moves = []
         temp_board = board.copy()
-        for move in pv[:8]:          # máximo 8 jugadas por línea
+        for move in pv[:8]:  # máximo 8 jugadas por línea
             try:
                 san_moves.append(temp_board.san(move))
                 temp_board.push(move)
             except Exception:
                 break
 
-        result.append({
-            "score": score_str,
-            "moves": " ".join(san_moves),
-            "depth": info.get("depth", depth),
-        })
+        result.append(
+            {
+                "score": score_str,
+                "moves": " ".join(san_moves),
+                "depth": info.get("depth", depth),
+            }
+        )
 
     return result
 
@@ -99,8 +101,8 @@ async def handle_analysis_ws(ws: WebSocket):
             raw = await ws.receive_text()
 
             try:
-                data  = json.loads(raw)
-                fen   = data.get("fen",   chess.STARTING_FEN)
+                data = json.loads(raw)
+                fen = data.get("fen", chess.STARTING_FEN)
                 depth = int(data.get("depth", 18))
                 lines = int(data.get("lines", 3))
             except Exception:
@@ -117,15 +119,18 @@ async def handle_analysis_ws(ws: WebSocket):
             async def analyze_and_send(fen=fen, depth=depth, lines=lines):
                 try:
                     result = await loop.run_in_executor(
-                        _analysis_executor,
-                        _run_analysis, fen, depth, lines
+                        _analysis_executor, _run_analysis, fen, depth, lines
                     )
-                    await ws.send_text(json.dumps({
-                        "analyzing": False,
-                        "fen":       fen,
-                        "depth":     depth,
-                        "lines":     result,
-                    }))
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "analyzing": False,
+                                "fen": fen,
+                                "depth": depth,
+                                "lines": result,
+                            }
+                        )
+                    )
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:

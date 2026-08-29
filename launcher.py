@@ -1,9 +1,9 @@
 import sys
 import threading
 import time
+import tkinter as tk
 import urllib.request
 import webbrowser
-import tkinter as tk
 from tkinter import messagebox
 
 URL = "http://127.0.0.1:8000"
@@ -15,6 +15,7 @@ URL = "http://127.0.0.1:8000"
 def start_server():
     try:
         import uvicorn
+
         from main import app
 
         config = uvicorn.Config(
@@ -23,7 +24,7 @@ def start_server():
             port=8000,
             log_level="info",
             access_log=False,
-            use_colors=False
+            use_colors=False,
         )
 
         server = uvicorn.Server(config)
@@ -31,6 +32,7 @@ def start_server():
 
     except Exception as e:
         import traceback
+
         with open("BOOT_ERROR.log", "a", encoding="utf-8") as f:
             f.write("\n" + "=" * 80 + "\n")
             f.write(str(e) + "\n")
@@ -61,7 +63,9 @@ class LauncherApp:
 
         # ================= ICONO =================
         try:
-            self.root.iconbitmap("C:\\Users\\luisg\\Desktop\\CHESS-TRAINER\\chesstrainer\\icon.ico")  # 👈 tu icono aquí
+            self.root.iconbitmap(
+                "C:\\Users\\luisg\\Desktop\\CHESS-TRAINER\\chesstrainer\\icon.ico"
+            )  # 👈 tu icono aquí
         except:
             pass
 
@@ -71,29 +75,30 @@ class LauncherApp:
 
         self.message = tk.StringVar(value="Iniciando Chess Trainer...")
 
-        tk.Label(self.root, text="Chess Trainer",
-                 font=("Segoe UI", 16, "bold")).pack(pady=(12, 4))
+        tk.Label(self.root, text="Chess Trainer", font=("Segoe UI", 16, "bold")).pack(
+            pady=(12, 4)
+        )
 
         tk.Label(
             self.root,
             text="⚠ NO CIERRES ESTA VENTANA (el servidor se detiene)",
             fg="red",
-            font=("Segoe UI", 9, "bold")
+            font=("Segoe UI", 9, "bold"),
         ).pack(pady=(0, 5))
 
-        tk.Label(self.root, textvariable=self.message,
-                 font=("Segoe UI", 10)).pack(pady=(0, 8))
+        tk.Label(self.root, textvariable=self.message, font=("Segoe UI", 10)).pack(
+            pady=(0, 8)
+        )
 
         self.open_button = tk.Button(
             self.root,
             text="Abrir en navegador",
             state="disabled",
-            command=lambda: webbrowser.open(URL)
+            command=lambda: webbrowser.open(URL),
         )
         self.open_button.pack(pady=(0, 8))
 
-        tk.Button(self.root, text="Cerrar programa",
-                  command=self.safe_exit).pack()
+        tk.Button(self.root, text="Cerrar programa", command=self.safe_exit).pack()
 
         threading.Thread(target=start_server, daemon=True).start()
         threading.Thread(target=self.poll_server, daemon=True).start()
@@ -104,7 +109,7 @@ class LauncherApp:
     def safe_exit(self):
         if messagebox.askyesno(
             "Chess Trainer",
-            "Si cierras esto, el servidor se detendrá.\n¿Seguro que quieres salir?"
+            "Si cierras esto, el servidor se detendrá.\n¿Seguro que quieres salir?",
         ):
             self.root.destroy()
 

@@ -1,16 +1,16 @@
 # modes/teacher_mode_handler.py
+import asyncio
 import json
+
 import chess
 from fastapi import WebSocket, WebSocketDisconnect
+
 from core.player import Player
 from modes.multiplayer_mode import MultiplayerGame
-import asyncio
+
 
 async def handle_teacher_mode(
-    ws: WebSocket,
-    firebase_user,
-    lobby_id_param: str | None,
-    lobby_manager
+    ws: WebSocket, firebase_user, lobby_id_param: str | None, lobby_manager
 ):
     if not lobby_id_param:
         await ws.send_text("error:Se requiere lobby_id para modo profesor")
@@ -19,7 +19,7 @@ async def handle_teacher_mode(
 
     player = Player(ws, name=firebase_user.email)
     player.uid = firebase_user.uid
-    player.display_name = firebase_user.email.split('@')[0]
+    player.display_name = firebase_user.email.split("@")[0]
 
     # Aquí deberías verificar si es profesor (puedes usar un campo en Firestore)
     # Por ahora lo dejamos abierto para pruebas

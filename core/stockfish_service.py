@@ -1,19 +1,16 @@
 # core/stockfish_service.py
 import os
-import sys
 import platform
 import shutil
-import zipfile
+import subprocess
+import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import chess.engine
 
-import subprocess
-import chess.engine
-
 CREATE_NO_WINDOW = 0x08000000
-
 
 
 DEFAULT_STOCKFISH_URL = (
@@ -105,13 +102,17 @@ class StockfishService:
 
         size = dest_path.stat().st_size
         if size < MIN_ZIP_SIZE:
-            raise RuntimeError(f"Descarga inválida: zip demasiado pequeño ({size} bytes)")
+            raise RuntimeError(
+                f"Descarga inválida: zip demasiado pequeño ({size} bytes)"
+            )
 
     def _extract_executable_from_zip(self, zip_path: Path, engine_path: Path):
         print(f"[STOCKFISH] Extrayendo {zip_path}")
         try:
             with zipfile.ZipFile(zip_path, "r") as zf:
-                candidates = [name for name in zf.namelist() if name.lower().endswith(".exe")]
+                candidates = [
+                    name for name in zf.namelist() if name.lower().endswith(".exe")
+                ]
                 if not candidates:
                     raise RuntimeError("El ZIP no contiene ejecutable .exe")
                 executable_name = candidates[0]
@@ -126,9 +127,8 @@ class StockfishService:
     def _load_engine(self):
         try:
             self.engine = chess.engine.SimpleEngine.popen_uci(
-    str(self.engine_path),
-    creationflags=CREATE_NO_WINDOW
-)
+                str(self.engine_path), creationflags=CREATE_NO_WINDOW
+            )
             self.engine.configure({"Threads": 2, "Hash": 128})
             print(f"Stockfish cargado: {self.engine.id['name']} ({self.engine_path})")
         except Exception as e:
@@ -138,8 +138,7 @@ class StockfishService:
     def analyze(self, board, depth=16):
         if not self.engine:
             return []
-        info = self.engine.analyse(
-            board, chess.engine.Limit(depth=depth), multipv=3)
+        info = self.engine.analyse(board, chess.engine.Limit(depth=depth), multipv=3)
         result = []
         for pv in info[:3]:
             if pv.get("pv"):
