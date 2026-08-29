@@ -27,3 +27,13 @@ Thumbs.db
 .vscode/
 
 CHANGELOG.md
+ 
+# Build artifacts and packaged binaries
+build/
+dist/
+*.exe
+*.exe.sha256
+*.sha256
+*.pkg
+*.pyz
+warn-*.txt
