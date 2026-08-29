@@ -64,7 +64,20 @@ async def handle_local_mode(ws, firebase_user):
                 player.score = 0
                 await ws.send_text(
                     f"pgn_info:{_extract_pgn_headers_json(pgn_text)}")
+                # Enviar resumen de piezas de apertura (primeras 5 medias jugadas)
+                try:
+                    op = game.get_opening_pieces()
+                    print(f"[OPENING_PIECES] {op}")
+                    await ws.send_text(f"opening_pieces:{json.dumps(op)}")
+                except Exception as e:
+                    print(f"[OPENING_PIECES ERROR] {e}")
                 await _send_initial_state(ws, game)
+                # Enviar game_progress para que el cliente actualice highlights iniciales
+                total = len(game.pgn_moves)
+                try:
+                    await ws.send_text(f"game_progress:0|{total}")
+                except Exception:
+                    pass
                 await ws.send_text(
                     "feedback:success|¡Partida lista! Adivina las jugadas del GM||0")
 

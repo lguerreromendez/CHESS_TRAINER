@@ -185,6 +185,7 @@ function initLocalMode() {
       const current = parseInt(parts[0]) || 0;
       const total   = parseInt(parts[1]) || 0;
       updateGameProgress('local', current, total);
+      updateOpeningHighlight(current);
     }
     else if (msg.startsWith("gameover:")) {
       hideEnginePanel(); hideBgEval(); updateNavBar();
@@ -213,6 +214,16 @@ function initLocalMode() {
       // El servidor envía los headers del PGN al conectar o al cargar uno nuevo
       renderGameInfo(msg.substring(9));
     }
+      else if (msg.startsWith("opening_pieces:")) {
+        try {
+            const payload = JSON.parse(msg.substring(15));
+            // structured payload: { white: [{piece,from,san},...], black: [...] }
+            window.openingPiecesData = payload;
+            // only update highlight (do not display the textual list)
+            const cur = window.currentGameProgress || 0;
+            updateOpeningHighlight(cur);
+          } catch (e) { /* ignore */ }
+      }
   };
 
   // Resetear el textarea por si quedó algo de una sesión anterior
@@ -1512,4 +1523,37 @@ function renderGameInfo(payload) {
   } catch {
     if (payload.includes('[White')) renderGameInfoFromPgn(payload);
   }
+}
+
+// renderOpeningPieces removed: opening pieces textual list is hidden by design.
+
+function highlightOpeningSquare(from) {
+  if (!from) return;
+  let style = document.getElementById('opening-sq-style');
+  if (!style) { style = document.createElement('style'); style.id = 'opening-sq-style'; document.head.appendChild(style); }
+  style.textContent = `#board-local [data-square="${from}"] { background: rgba(100,180,255,0.65) !important; border: 2px solid rgba(30,110,220,0.9) !important; }`;
+}
+
+function clearOpeningHighlight() {
+  const s = document.getElementById('opening-sq-style');
+  if (s) s.textContent = '';
+}
+
+function updateOpeningHighlight(currentTurn) {
+  // currentTurn = number of moves already played (0 means next is white move 1)
+  try {
+    window.currentGameProgress = currentTurn;
+    clearOpeningHighlight();
+    const data = window.openingPiecesData;
+    if (!data) return;
+    const idx = Math.floor(currentTurn / 2);
+    if (currentTurn % 2 === 0) {
+      // white to move
+      const obj = (data.white || [])[idx];
+      if (obj && obj.from) highlightOpeningSquare(obj.from);
+    } else {
+      const obj = (data.black || [])[idx];
+      if (obj && obj.from) highlightOpeningSquare(obj.from);
+    }
+  } catch (e) { /* ignore */ }
 }
