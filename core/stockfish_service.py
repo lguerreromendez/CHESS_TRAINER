@@ -11,6 +11,8 @@ import chess.engine
 
 CREATE_NO_WINDOW = 0x08000000
 
+_STOCKFISH_SERVICE = None
+
 
 DEFAULT_STOCKFISH_URL = (
     "https://github.com/official-stockfish/Stockfish/releases/latest/download/"
@@ -147,3 +149,10 @@ class StockfishService:
     def quit(self):
         if self.engine:
             self.engine.quit()
+
+
+def get_shared_stockfish_service():
+    global _STOCKFISH_SERVICE
+    if _STOCKFISH_SERVICE is None:
+        _STOCKFISH_SERVICE = StockfishService()
+    return _STOCKFISH_SERVICE

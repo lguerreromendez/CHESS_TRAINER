@@ -156,10 +156,11 @@ class MultiplayerGame:
             self.game.board.push(correct)
             self.game.current_turn += 1
 
-            fen = self.game.board.fen()
             next_move_num = self.game.current_turn + 1
 
-            await self.lobby.broadcast(f"fen:{fen}")
+            await self.lobby.broadcast(
+                f"move_applied:{correct.uci()}|{self.game.current_turn}|{total}"
+            )
             await self.lobby.broadcast(
                 f"turno:Adivina jugada {next_move_num} de {total}"
             )

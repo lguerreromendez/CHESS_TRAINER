@@ -1,17 +1,42 @@
 # modes/local_mode.py
 
 import asyncio
+import hashlib
 import io
 import json
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 
 import chess
 import chess.pgn
 
-from core.stockfish_service import StockfishService
+from core.stockfish_service import get_shared_stockfish_service
 
 _bg_executor = ThreadPoolExecutor(max_workers=1)
+_analysis_cache: OrderedDict[str, dict] = OrderedDict()
+_analysis_cache_max = 24
+
+
+def _analysis_cache_key(pgn_text: str, depth: int) -> str:
+    digest = hashlib.sha1(pgn_text.encode("utf-8")).hexdigest()
+    return f"{depth}:{digest}"
+
+
+def _get_cached_analysis(key: str):
+    cached = _analysis_cache.get(key)
+    if cached is not None:
+        _analysis_cache.move_to_end(key)
+        return cached
+    return None
+
+
+def _store_cached_analysis(key: str, data: dict):
+    _analysis_cache[key] = data
+    _analysis_cache.move_to_end(key)
+    while len(_analysis_cache) > _analysis_cache_max:
+        _analysis_cache.popitem(last=False)
 
 
 class LocalMode:
@@ -23,7 +48,8 @@ class LocalMode:
         self.current_turn = 0
         self.score_total = 0
         self.depth = 16
-        self.stockfish = StockfishService()
+        self.stockfish = get_shared_stockfish_service()
+        self._opening_pieces = {"white": [], "black": []}
         # ── Estadísticas de sesión ──
         self._gm_hits = 0  # acertó con GM
         self._engine_hits = 0  # acertó con módulo (no GM)
@@ -58,6 +84,17 @@ class LocalMode:
             pgn_text = pgn_input
         else:
             print("PGN inválido:", pgn_input)
+            return
+
+        cache_key = _analysis_cache_key(pgn_text, self.depth)
+        cached = _get_cached_analysis(cache_key)
+        if cached:
+            self.pgn_moves = list(cached["pgn_moves"])
+            self.stockfish_best = deepcopy(cached["stockfish_best"])
+            self._opening_pieces = deepcopy(cached["opening_pieces"])
+            if progress_cb:
+                progress_cb(len(self.pgn_moves), len(self.pgn_moves))
+            print(f"[PGN CACHE] {len(self.pgn_moves)} jugadas (depth={self.depth})")
             return
 
         try:
@@ -140,6 +177,14 @@ class LocalMode:
                     progress_cb(current, total)
 
             print(f"[PGN] {len(self.pgn_moves)} jugadas (depth={self.depth})")
+            _store_cached_analysis(
+                cache_key,
+                {
+                    "pgn_moves": list(self.pgn_moves),
+                    "stockfish_best": deepcopy(self.stockfish_best),
+                    "opening_pieces": deepcopy(self._opening_pieces),
+                },
+            )
         except Exception as e:
             print(f"[PGN ERROR] {e}")
 
@@ -148,7 +193,10 @@ class LocalMode:
         listas de objetos: {'piece': 'Caballo', 'from': 'g1', 'san': 'Nf3'}.
         """
         # If already computed during analysis, pad and return
-        if hasattr(self, "_opening_pieces") and self._opening_pieces:
+        has_opening = hasattr(self, "_opening_pieces") and any(
+            self._opening_pieces.get(color) for color in ("white", "black")
+        )
+        if has_opening:
             w = list(self._opening_pieces.get("white", []))
             b = list(self._opening_pieces.get("black", []))
             # pad with placeholders

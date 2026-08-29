@@ -26,8 +26,10 @@ def parse_moves_from_pgn(pgn_text):
 
 
 def test_get_opening_pieces_basic(monkeypatch):
-    # Replace StockfishService with dummy to avoid external engine dependency
-    monkeypatch.setattr(local_mode, "StockfishService", DummyStockfish)
+    # Replace shared Stockfish service with dummy to avoid external engine dependency
+    monkeypatch.setattr(
+        local_mode, "get_shared_stockfish_service", lambda: DummyStockfish()
+    )
 
     pgn = """
     [Event "Test"]

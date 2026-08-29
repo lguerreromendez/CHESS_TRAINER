@@ -17,6 +17,8 @@ env/
 # Archivos temporales y de desarrollo
 estructura.txt
 *.pgn
+logs/
+*.log
 
 # Docker (no necesario para versión local)
 Dockerfile

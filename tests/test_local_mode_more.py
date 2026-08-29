@@ -12,7 +12,9 @@ class DummyStockfish:
 
 
 def test_get_top3_str_and_calculate_points(monkeypatch):
-    monkeypatch.setattr(local_mode, "StockfishService", DummyStockfish)
+    monkeypatch.setattr(
+        local_mode, "get_shared_stockfish_service", lambda: DummyStockfish()
+    )
 
     lm = local_mode.LocalMode(auto_load=False)
     # prepare moves: 1. e4 e5

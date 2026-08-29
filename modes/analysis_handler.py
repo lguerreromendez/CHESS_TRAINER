@@ -15,13 +15,13 @@ import chess
 import chess.engine
 from fastapi import WebSocket, WebSocketDisconnect
 
-from core.stockfish_service import StockfishService
+from core.stockfish_service import get_shared_stockfish_service
 
 # Executor dedicado al análisis en tiempo real (1 hilo — Stockfish no es thread-safe)
 _analysis_executor = ThreadPoolExecutor(max_workers=1)
 
 # Instancia compartida de Stockfish para análisis
-_stockfish = StockfishService()
+_stockfish = get_shared_stockfish_service()
 
 
 def _run_analysis(fen: str, depth: int, lines: int) -> list[dict]:

@@ -3,6 +3,7 @@
 let board = null;
 let game  = null;
 let ws    = null;
+let mpLiveGame = null;
 
 let gm_hits = 0, module_hits = 0, misses = 0;
 let enginePanelTimer = null;
@@ -50,6 +51,55 @@ let feedbackTimer = null;
 // ── helpers ─────────────────────────────────────────────────
 function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
 function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
+function parseUciMove(uci) {
+  const from = uci.slice(0, 2);
+  const to   = uci.slice(2, 4);
+  const promotion = uci.length > 4 ? uci.slice(4, 5) : undefined;
+  return promotion ? { from, to, promotion } : { from, to };
+}
+
+function syncMpLiveGameFromFen(fen) {
+  if (!mpLiveGame) mpLiveGame = new Chess();
+  try {
+    if (fen === 'start') mpLiveGame.reset();
+    else mpLiveGame.load(fen);
+  } catch {}
+}
+
+function applyMpLiveMove(uci) {
+  if (!mpLiveGame) mpLiveGame = new Chess();
+  let moveFen = null;
+  try {
+    const move = parseUciMove(uci);
+    mpLiveGame.move(move);
+    moveFen = mpLiveGame.fen();
+  } catch {
+    return null;
+  }
+
+  if (mpIsPrivate) {
+    mpFenHistory.push(moveFen);
+  }
+
+  if (mpIsReviewing()) {
+    mpUpdateNavBar();
+    return moveFen;
+  }
+
+  try {
+    game.load(moveFen);
+    board.position(moveFen, false);
+    if (board?.resize) board.resize();
+  } catch {}
+
+  if (mpIsPrivate) {
+    mpViewIndex = -1;
+    mpUpdateNavBar();
+  }
+
+  return moveFen;
+}
 
 // ── Inicio automático ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -123,6 +173,8 @@ function initLocalMode() {
     pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
   });
 
+  mpLiveGame = new Chess();
+
   const protocol = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${protocol}://${location.host}/ws`);
 
@@ -140,10 +192,12 @@ function initLocalMode() {
         // Sin partida — tablero en posición inicial, bloqueado
         board.start(false);
         game.reset();
+        syncMpLiveGameFromFen('start');
         setBoardLocked(true);
         return;
       }
       game.load(fen); board.position(fen, false);
+      syncMpLiveGameFromFen(fen);
       setBoardLocked(false);
       fenHistory.push(fen);
       viewIndex = -1;
@@ -1123,6 +1177,15 @@ function initMultiplayer(lobbyId) {
       const total   = parseInt(parts[1]) || 0;
       updateGameProgress('mp', current, total);
     }
+    else if (msg.startsWith("move_applied:")) {
+      const payload = msg.substring(13).trim();
+      const parts   = payload.split('|');
+      const uci     = (parts[0] || '').trim();
+      const current = parseInt(parts[1]) || 0;
+      const total   = parseInt(parts[2]) || 0;
+      if (uci) applyMpLiveMove(uci);
+      updateGameProgress('mp', current, total);
+    }
     else if (msg.startsWith("gameover:"))    {
       try {
         const summary = JSON.parse(msg.substring(9));
@@ -1291,6 +1354,7 @@ function leaveMultiplayer() {
   if (ws) { try { ws.close(1000); } catch {} }
   _removeMpKeyHandler();
   mpFenHistory = []; mpViewIndex = -1; mpIsPrivate = false;
+  mpLiveGame = null;
   closeGroupSummary(); closeSummary();
   hide('multiplayer-ui'); show('menu');
   currentLobbyId = null;
