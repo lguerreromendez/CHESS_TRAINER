@@ -34,11 +34,12 @@
     <div class="game-layout">
 
       <!-- Columna izquierda: tablero -->
-      <div class="board-column">
+      <div class="board-column" id="mp-center-column">
         <div class="board-header">
           <span id="status-local" class="turn-indicator">Cargando partida…</span>
           <span id="score-local" class="score-pill">0 pts</span>
         </div>
+        <div id="quick-result-local" class="quick-result" style="display:none;"></div>
         <div id="board-wrapper-local">
           <div id="board-local"></div>
         </div>
@@ -46,7 +47,8 @@
           <button class="btn-control" onclick="resetBoard()" title="Nueva partida">↺ Reiniciar</button>
           <button class="btn-control btn-hint" onclick="suggestMove()" title="Ver sugerencias">💡 Pista</button>
           <button class="btn-control btn-pgn-toggle" onclick="togglePgnPanel()" id="btn-pgn-toggle">📋 Pegar PGN</button>
-          <button class="btn-control btn-leave" onclick="location.reload()">↻ Recargar</button>
+          <button class="btn-control btn-analysis" onclick="openAnalysis()" title="Abrir tablero de análisis">🔍 Analizar</button>
+          <button class="btn-control btn-leave" onclick="leaveLocal()">✕ Salir</button>
         </div>
 
         <!-- Barra de navegación del tablero -->
@@ -107,7 +109,7 @@
       </div>
 
       <!-- Columna derecha: info -->
-      <div class="info-column">
+      <div class="info-column" id="mp-right-column">
 
         <!-- ── Info de la partida ── -->
         <div id="game-info-local" class="game-info-card">
@@ -130,7 +132,7 @@
           </div>
         </div>
 
-        <!-- Panel engine -->
+        <!-- Panel engine (oculto hasta que el jugador mueva) -->
         <div id="engine-panel-local" class="engine-panel">
           <div class="engine-panel-header">
             <span class="engine-icon">⚙</span>
@@ -150,14 +152,10 @@
           </div>
         </div>
 
-        <!-- Panel de evaluación de movimiento (background eval) -->
-        <div id="bg-eval-local" class="bg-eval-panel" style="display:none;">
-          <span class="bge-title">Analizando tu jugada…</span>
-          <span class="bge-move" id="bge-move">—</span>
-          <span class="bge-score" id="bge-score">?</span>
-        </div>
+        <!-- Feedback principal -->
+        <div id="main-feedback-local" class="feedback-card" style="display:none;"></div>
 
-        <!-- Panel de estad -->
+        <!-- Panel de estadísticas -->
         <div id="stats-panel" class="stats-panel">
           <div class="stats-row">
             <span class="stats-label">Aciertos (GM)</span>
@@ -173,20 +171,20 @@
           </div>
         </div>
 
-        <!-- Retroalimentación (feedback) -->
-        <div id="main-feedback-local" class="feedback-card" style="display:none;"></div>
-      </div>
+        <!-- Feedback secundario (gameover, etc.) -->
+        <div id="feedback-local" class="feedback-secondary"></div>
 
+      </div>
     </div>
 
   </div>
 
   <!-- ══════════════ SUMMARY MODAL ══════════════ -->
-  <div id="summary-modal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <span class="modal-title">Resumen de partida</span>
-        <span class="modal-close" onclick="closeSummaryModal()">&times;</span>
+  <div id="summary-modal" class="summary-modal" style="display:none;">
+    <div class="summary-card">
+      <div class="summary-header">
+        <div class="modal-title">Resumen de partida</div>
+        <span class="modal-close" onclick="closeSummary()">&times;</span>
       </div>
       <div class="modal-body">
         <div class="summary-grid">
@@ -223,7 +221,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-primary" onclick="closeSummaryModal(); resetBoard()">Jugar otra partida</button>
+        <button class="btn-primary" onclick="closeSummary(); resetBoard()">Jugar otra partida</button>
+        <button class="btn-ghost" onclick="leaveLocal()">← Volver al inicio</button>
       </div>
     </div>
   </div>
