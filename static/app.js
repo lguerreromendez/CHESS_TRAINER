@@ -177,8 +177,100 @@ function startMode(mode) {
   }
 }
 
-// ── WebSocket send helper ─────────────────────────────────────
-// Si el socket aún está CONNECTING, reintenta cada 80 ms (máx. 5 s).
+// ── WebSocket Robusto: reconexión automática y heartbeat ─────
+let wsReconnectAttempts = 0;
+let wsReconnectMaxAttempts = 15;
+let wsReconnectDelay = 1000; // ms
+let wsHeartbeatInterval = null;
+let wsReconnectTimer = null;
+let wsMode = null;  // 'local' o 'multiplayer'
+let wsModeParams = {};  // params para reconectar
+
+function wsConnect(mode = 'local', params = {}) {
+  wsMode = mode;
+  wsModeParams = params;
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  let url = `${protocol}://${location.host}/ws`;
+  
+  if (mode === 'multiplayer') {
+    const uid = params.uid || '';
+    const lobbyId = params.lobbyId || '';
+    url += `?mode=multiplayer&uid=${encodeURIComponent(uid)}`;
+    if (lobbyId) url += `&lobby_id=${encodeURIComponent(lobbyId)}`;
+  }
+  
+  try {
+    ws = new WebSocket(url);
+  } catch (e) {
+    console.error("[WS] Error creando WebSocket:", e);
+    return;
+  }
+
+  ws.onopen = () => {
+    wsReconnectAttempts = 0;
+    console.log("[WS] Conectado");
+    const statusMode = mode === 'local' ? 'local' : 'mp';
+    setStatus("✓ Conectado", statusMode);
+    wsStartHeartbeat();
+    if (mode === 'multiplayer' && params.displayName) {
+      wsSend(JSON.stringify({ type: "user_info", displayName: params.displayName }));
+    }
+  };
+
+  ws.onclose = () => {
+    console.log("[WS] Desconectado");
+    wsStopHeartbeat();
+    wsScheduleReconnect();
+  };
+
+  ws.onerror = (err) => {
+    console.error("[WS] Error:", err);
+    wsStopHeartbeat();
+  };
+
+  ws.onmessage = wsHandleMessage;
+}
+
+function wsStopHeartbeat() {
+  if (wsHeartbeatInterval) {
+    clearInterval(wsHeartbeatInterval);
+    wsHeartbeatInterval = null;
+  }
+}
+
+function wsStartHeartbeat() {
+  wsStopHeartbeat();
+  // Enviar ping cada 30 segundos
+  wsHeartbeatInterval = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('ping');
+    }
+  }, 30000);
+}
+
+function wsScheduleReconnect() {
+  if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+  
+  if (wsReconnectAttempts >= wsReconnectMaxAttempts) {
+    const statusMode = wsMode === 'local' ? 'local' : 'mp';
+    setStatus("❌ Conexión perdida (recarga la página)", statusMode);
+    return;
+  }
+  
+  wsReconnectAttempts++;
+  const delay = Math.min(wsReconnectDelay * Math.pow(1.5, wsReconnectAttempts - 1), 30000);
+  const statusMode = wsMode === 'local' ? 'local' : 'mp';
+  const remainingSecs = Math.round(delay / 1000);
+  
+  console.log(`[WS] Reconectando en ${remainingSecs}s (intento ${wsReconnectAttempts}/${wsReconnectMaxAttempts})`);
+  setStatus(`⟳ Reconectando en ${remainingSecs}s...`, statusMode);
+  
+  wsReconnectTimer = setTimeout(() => {
+    console.log(`[WS] Intentando reconectar...`);
+    wsConnect(wsMode, wsModeParams);
+  }, delay);
+}
+
 function wsSend(msg) {
   if (!ws) return;
   if (ws.readyState === WebSocket.OPEN) {
@@ -198,6 +290,18 @@ function wsSend(msg) {
   }
 }
 
+// Handler centralizado para mensajes del WebSocket
+function wsHandleMessage({ data: msg }) {
+  // Ignorar pong
+  if (msg === 'pong') return;
+  
+  if (wsMode === 'local') {
+    wsHandleLocalMessage(msg);
+  } else if (wsMode === 'multiplayer') {
+    wsHandleMultiplayerMessage(msg);
+  }
+}
+
 // ── Local mode ────────────────────────────────────────────────
 
 function initLocalMode() {
@@ -211,110 +315,8 @@ function initLocalMode() {
 
   mpLiveGame = new Chess();
 
-  const protocol = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${protocol}://${location.host}/ws`);
-
-  ws.onopen = () => {
-    setStatus("Conectado · Modo Local", "local");
-  };
-  ws.onclose = () => setStatus("Desconectado", "local");
-  ws.onerror = () => setStatus("Error de conexión", "local");
-
-  ws.onmessage = ({ data: msg }) => {
-
-    if (msg.startsWith("fen:")) {
-      const fen = msg.substring(4).trim();
-      if (fen === 'start') {
-        // Sin partida — tablero en posición inicial, bloqueado
-        board.start(false);
-        game.reset();
-        syncMpLiveGameFromFen('start');
-        setBoardLocked(true);
-        return;
-      }
-      game.load(fen); board.position(fen, false);
-      syncMpLiveGameFromFen(fen);
-      setBoardLocked(false);
-      fenHistory.push(fen);
-      viewIndex = -1;
-      updateNavBar();
-    }
-    else if (msg === "local_no_pgn:1") {
-      // Abrir el panel de PGN automáticamente e invitar al usuario
-      setBoardLocked(true);
-      setStatus("📋 Pega un PGN para empezar", "local");
-      // Abrir panel si no está ya abierto
-      const panel = document.getElementById('pgn-paste-panel');
-      if (panel && panel.style.display === 'none') togglePgnPanel();
-    }
-    else if (msg.startsWith("score:")) {
-      const v = msg.substring(6).trim();
-      document.getElementById("score-local").textContent = `${v} pts`;
-    }
-    else if (msg.startsWith("turno:")) {
-      setStatus(msg.substring(6), "local");
-    }
-    else if (msg.startsWith("feedback:")) {
-      const parts    = msg.substring(9).split('|');
-      const type     = (parts[0] || 'info').trim();
-      const text     = (parts[1] || '').trim();
-      const points   = (parts[parts.length - 1] || '0').trim();
-      const top3_str = parts.slice(2, parts.length - 1).join('|').trim();
-
-      if (text.includes("lista") || text.includes("analizado") || (text.includes("PGN") && text.includes("cargado"))) {
-        setBoardLocked(false);
-        hideAnalysisProgress('local');
-      }
-
-      renderFeedbackLocal(type, text, points, top3_str);
-      maybeCountLocalFeedback(text);
-      if (top3_str) showEnginePanel(top3_str);
-    }
-    else if (msg.startsWith("game_progress:")) {
-      const parts   = msg.substring(14).split('|');
-      const current = parseInt(parts[0]) || 0;
-      const total   = parseInt(parts[1]) || 0;
-      updateGameProgress('local', current, total);
-      updateOpeningHighlight(current);
-    }
-    else if (msg.startsWith("gameover:")) {
-      hideEnginePanel(); hideBgEval(); updateNavBar();
-      try {
-        const summary = JSON.parse(msg.substring(9));
-        showSummaryModal(summary);
-      } catch {
-        setStatus(msg.substring(9), "local");
-      }
-    }
-    else if (msg.startsWith("bg_eval:")) {
-      const parts  = msg.substring(8).split('|');
-      const state  = parts[0];
-      const uci    = parts[1] || '';
-      const score  = parts[2] || '';
-      if (state === 'analyzing') showBgEval(uci, null);
-      else if (state === 'result') showBgEval(uci, score);
-    }
-    else if (msg.startsWith("analysis_progress:")) {
-      const parts   = msg.substring(18).split('|');
-      const current = parseInt(parts[0]) || 0;
-      const total   = parseInt(parts[1]) || null;
-      updateAnalysisProgress('local', current, total);
-    }
-    else if (msg.startsWith("pgn_info:")) {
-      // El servidor envía los headers del PGN al conectar o al cargar uno nuevo
-      renderGameInfo(msg.substring(9));
-    }
-      else if (msg.startsWith("opening_pieces:")) {
-        try {
-            const payload = JSON.parse(msg.substring(15));
-            // structured payload: { white: [{piece,from,san},...], black: [...] }
-            window.openingPiecesData = payload;
-            // only update highlight (do not display the textual list)
-            const cur = window.currentGameProgress || 0;
-            updateOpeningHighlight(cur);
-          } catch (e) { /* ignore */ }
-      }
-  };
+  // Usar el nuevo sistema robusto de WebSocket
+  wsConnect('local');
 
   // Resetear el textarea por si quedó algo de una sesión anterior
   const ta = document.getElementById('pgn-textarea');
@@ -347,6 +349,102 @@ function initLocalMode() {
       if (e.key === 'ArrowDown' || e.key === 'End') { e.preventDefault(); navLast(); }
     };
     document.addEventListener('keydown', window._localKeyHandler);
+  }
+}
+
+// Handler para mensajes del modo local
+function wsHandleLocalMessage(msg) {
+  if (msg.startsWith("fen:")) {
+    const fen = msg.substring(4).trim();
+    if (fen === 'start') {
+      // Sin partida — tablero en posición inicial, bloqueado
+      board.start(false);
+      game.reset();
+      syncMpLiveGameFromFen('start');
+      setBoardLocked(true);
+      return;
+    }
+    game.load(fen); board.position(fen, false);
+    syncMpLiveGameFromFen(fen);
+    setBoardLocked(false);
+    fenHistory.push(fen);
+    viewIndex = -1;
+    updateNavBar();
+  }
+  else if (msg === "local_no_pgn:1") {
+    // Abrir el panel de PGN automáticamente e invitar al usuario
+    setBoardLocked(true);
+    setStatus("📋 Pega un PGN para empezar", "local");
+    // Abrir panel si no está ya abierto
+    const panel = document.getElementById('pgn-paste-panel');
+    if (panel && panel.style.display === 'none') togglePgnPanel();
+  }
+  else if (msg.startsWith("score:")) {
+    const v = msg.substring(6).trim();
+    document.getElementById("score-local").textContent = `${v} pts`;
+  }
+  else if (msg.startsWith("turno:")) {
+    setStatus(msg.substring(6), "local");
+  }
+  else if (msg.startsWith("feedback:")) {
+    const parts    = msg.substring(9).split('|');
+    const type     = (parts[0] || 'info').trim();
+    const text     = (parts[1] || '').trim();
+    const points   = (parts[parts.length - 1] || '0').trim();
+    const top3_str = parts.slice(2, parts.length - 1).join('|').trim();
+
+    if (text.includes("lista") || text.includes("analizado") || (text.includes("PGN") && text.includes("cargado"))) {
+      setBoardLocked(false);
+      hideAnalysisProgress('local');
+    }
+
+    renderFeedbackLocal(type, text, points, top3_str);
+    maybeCountLocalFeedback(text);
+    if (top3_str) showEnginePanel(top3_str);
+  }
+  else if (msg.startsWith("game_progress:")) {
+    const parts   = msg.substring(14).split('|');
+    const current = parseInt(parts[0]) || 0;
+    const total   = parseInt(parts[1]) || 0;
+    updateGameProgress('local', current, total);
+    updateOpeningHighlight(current);
+  }
+  else if (msg.startsWith("gameover:")) {
+    hideEnginePanel(); hideBgEval(); updateNavBar();
+    try {
+      const summary = JSON.parse(msg.substring(9));
+      showSummaryModal(summary);
+    } catch {
+      setStatus(msg.substring(9), "local");
+    }
+  }
+  else if (msg.startsWith("bg_eval:")) {
+    const parts  = msg.substring(8).split('|');
+    const state  = parts[0];
+    const uci    = parts[1] || '';
+    const score  = parts[2] || '';
+    if (state === 'analyzing') showBgEval(uci, null);
+    else if (state === 'result') showBgEval(uci, score);
+  }
+  else if (msg.startsWith("analysis_progress:")) {
+    const parts   = msg.substring(18).split('|');
+    const current = parseInt(parts[0]) || 0;
+    const total   = parseInt(parts[1]) || null;
+    updateAnalysisProgress('local', current, total);
+  }
+  else if (msg.startsWith("pgn_info:")) {
+    // El servidor envía los headers del PGN al conectar o al cargar uno nuevo
+    renderGameInfo(msg.substring(9));
+  }
+  else if (msg.startsWith("opening_pieces:")) {
+    try {
+      const payload = JSON.parse(msg.substring(15));
+      // structured payload: { white: [{piece,from,san},...], black: [...] }
+      window.openingPiecesData = payload;
+      // only update highlight (do not display the textual list)
+      const cur = window.currentGameProgress || 0;
+      updateOpeningHighlight(cur);
+    } catch (e) { /* ignore */ }
   }
 }
 
@@ -1064,23 +1162,20 @@ function initMultiplayer(lobbyId) {
     }
   }
 
-  const protocol = location.protocol === "https:" ? "wss" : "ws";
-  let url = `${protocol}://${location.host}/ws?mode=multiplayer&uid=${currentUser.uid}`;
-  if (lobbyId) { url += `&lobby_id=${encodeURIComponent(lobbyId)}`; currentLobbyId = lobbyId; }
+  // Usar el nuevo sistema robusto de WebSocket
+  const displayName = document.getElementById("username")?.textContent.trim() || "Jugador";
+  wsConnect('multiplayer', {
+    uid: currentUser?.uid || 'anonymous',
+    lobbyId: lobbyId || null,
+    displayName: displayName
+  });
 
-  ws = new WebSocket(url);
+  _initMpKeyHandler();
+}
 
-  ws.onopen = () => {
-    setStatus("Conectado al lobby", "mp");
-    const dn = document.getElementById("username")?.textContent.trim() || "Jugador";
-    ws.send(JSON.stringify({ type: "user_info", displayName: dn }));
-    _initMpKeyHandler();
-  };
-  ws.onclose = () => setStatus("Desconectado del lobby", "mp");
-  ws.onerror = () => setStatus("❌ Error de conexión", "mp");
-
-  ws.onmessage = ({ data: msg }) => {
-    msg = msg.trim();
+// Handler para mensajes del multiplayer
+function wsHandleMultiplayerMessage(msg) {
+  msg = msg.trim();
 
     if (msg.startsWith("fen:")) {
       const fen = msg.substring(4).trim();
@@ -1424,6 +1519,11 @@ function leaveMultiplayer() {
 function setStatus(text, mode = "local") {
   const el = document.getElementById(mode === "mp" ? "status-mp" : "status-local");
   if (el) el.textContent = text;
+}
+
+function updateConnectionStatus(mode, connected) {
+  const statusText = connected ? "✓ Conectado" : "⟳ Reconectando...";
+  setStatus(statusText, mode);
 }
 
 function openAnalysis() {

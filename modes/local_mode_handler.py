@@ -25,6 +25,14 @@ async def handle_local_mode(ws, firebase_user):
         while True:
             data = await ws.receive_text()
 
+            # Heartbeat: responder a pings
+            if data == "ping":
+                try:
+                    await ws.send_text("pong")
+                except Exception:
+                    pass
+                continue
+
             if data.startswith("move:"):
                 uci = data[5:].strip()
                 await game.handle_move(player, uci, None)

@@ -14,6 +14,9 @@ def _short_id(length=6) -> str:
 class LobbyManager:
     def __init__(self):
         self.lobbies = {}
+        # Grace period para reconexión del owner (en segundos)
+        # 300 segundos = 5 minutos, suficiente para problemas de red
+        self.owner_grace_seconds = 300
 
     def create_default_lobby(self):
         if "default" in self.lobbies:
