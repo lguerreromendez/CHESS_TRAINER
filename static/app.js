@@ -307,7 +307,7 @@ function wsHandleMessage({ data: msg }) {
 function initLocalMode() {
   game  = new Chess();
   board = Chessboard('board-local', {
-    draggable: !shouldUseTapMove(),
+    draggable: false,
     position: 'start',
     onDrop: onDropLocal,
     pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
@@ -1644,7 +1644,7 @@ function initMultiplayer(lobbyId) {
     game = new Chess();
     try {
       board = Chessboard('board-mp', {
-        draggable: !shouldUseTapMove(), position: 'start', onDrop: onDropMulti,
+        draggable: false, position: 'start', onDrop: onDropMulti,
         pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
       });
       if (board?.resize) board.resize();
