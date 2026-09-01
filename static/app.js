@@ -806,11 +806,41 @@ function _extractSquareFromEventTarget(target) {
   return null;
 }
 
+function _extractSquareFromBoardPoint(boardRoot, clientX, clientY) {
+  if (!boardRoot || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+  const rect = boardRoot.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+  if (localX < 0 || localY < 0 || localX > rect.width || localY > rect.height) return null;
+
+  const fileIndex = Math.max(0, Math.min(7, Math.floor((localX / rect.width) * 8)));
+  const rankFromTop = Math.max(0, Math.min(7, Math.floor((localY / rect.height) * 8)));
+  const orientation = (board && typeof board.orientation === 'function') ? String(board.orientation()) : 'white';
+  const files = 'abcdefgh';
+
+  const file = orientation === 'black' ? 7 - fileIndex : fileIndex;
+  const rank = orientation === 'black' ? rankFromTop + 1 : 8 - rankFromTop;
+  return `${files[file]}${rank}`;
+}
+
 function _resolveSquareFromInteraction(boardRoot, ev) {
   if (!boardRoot || !ev) return null;
 
+  if (Number.isFinite(ev.clientX) && Number.isFinite(ev.clientY)) {
+    const pointSquare = _extractSquareFromBoardPoint(boardRoot, ev.clientX, ev.clientY);
+    if (pointSquare) return pointSquare;
+  }
+
   let touchSquare = null;
   _forEachChangedTouch(ev, (t) => {
+    const pointSquare = _extractSquareFromBoardPoint(boardRoot, t.clientX, t.clientY);
+    if (pointSquare) {
+      touchSquare = pointSquare;
+      return;
+    }
     if (touchSquare) return;
     const node = document.elementFromPoint(t.clientX, t.clientY);
     const square = _extractSquareFromEventTarget(node);
