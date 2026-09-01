@@ -322,6 +322,8 @@ function initLocalMode() {
     onDrop: onDropLocal,
     pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
   });
+  window.board = board;
+  window.game = game;
   _bindTapMoveLocal();
 
   mpLiveGame = new Chess();
@@ -899,7 +901,6 @@ function _bindBoardTouchLock(boardRoot, key) {
         window._boardTouchLockIdentifiers.add(t.identifier);
       });
     }
-    if (ev.cancelable) ev.preventDefault();
     _setBoardTouchActive(true);
   };
 
@@ -920,7 +921,7 @@ function _bindBoardTouchLock(boardRoot, key) {
   };
 
   window[pointerDownKey] = (ev) => {
-    if (ev.pointerType === 'touch' && ev.cancelable) ev.preventDefault();
+    if (ev.pointerType === 'touch') _setBoardTouchActive(true);
   };
 
   window[pointerMoveKey] = (ev) => {
@@ -930,8 +931,7 @@ function _bindBoardTouchLock(boardRoot, key) {
   };
 
   window[dragStartKey] = (ev) => {
-    if (!shouldUseTapMove()) return;
-    if (ev.cancelable) ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
   };
 
   boardRoot.addEventListener('touchstart', window[startKey], { passive: false });
@@ -994,7 +994,9 @@ function _bindTapMoveLocal() {
   }
 
   window._tapHandlerLocal = (ev) => {
-    if (ev.type !== 'click' && !_isTouchLikeEvent(ev)) return;
+    const isPointerTap = ev.type === 'pointerup' || ev.type === 'touchend';
+    const isClickFallback = ev.type === 'click' || ev.type === 'dblclick';
+    if (!isPointerTap && !isClickFallback) return;
     if (ev.type === 'touchend' || (ev.type === 'pointerup' && ev.pointerType === 'touch')) {
       _lastTapTouchLocal = Date.now();
       if (ev.cancelable) ev.preventDefault();
@@ -1019,10 +1021,6 @@ function _bindTapMoveLocal() {
     }
 
     if (_tapSelectedLocal === square) {
-      _clearTapSelection(boardRoot, _tapSelectedLocal);
-      _clearLegalTargets(boardRoot, _tapLegalTargetsLocal);
-      _tapLegalTargetsLocal = [];
-      _tapSelectedLocal = null;
       return;
     }
 
