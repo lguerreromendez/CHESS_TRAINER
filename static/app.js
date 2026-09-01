@@ -307,11 +307,12 @@ function wsHandleMessage({ data: msg }) {
 function initLocalMode() {
   game  = new Chess();
   board = Chessboard('board-local', {
-    draggable: true,
+    draggable: !shouldUseTapMove(),
     position: 'start',
     onDrop: onDropLocal,
     pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
   });
+  _bindTapMoveLocal();
 
   mpLiveGame = new Chess();
 
@@ -589,6 +590,467 @@ function setBoardLocked(locked) {
   if (wrapper) wrapper.style.opacity = locked ? "0.45" : "1";
   const hint = document.getElementById("status-local");
   if (!locked && hint && hint.textContent.includes("Stockfish")) hint.textContent = "";
+}
+
+function isTouchDevice() {
+  return !!(
+    ('ontouchstart' in window) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+  );
+}
+
+function _isLikelyMobileUA() {
+  const ua = String(navigator.userAgent || navigator.vendor || '').toLowerCase();
+  return /(android|iphone|ipad|ipod|mobile|iemobile|opera mini)/.test(ua);
+}
+
+function _hasCoarsePointer() {
+  return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+
+function shouldUseTapMove() {
+  if (window._forceTapMove === true) return true;
+  if (window._hasSeenTouchInteraction) return true;
+  if (_isLikelyMobileUA()) return true;
+  if (_hasCoarsePointer()) return true;
+  if (isTouchDevice() && !(window.matchMedia && window.matchMedia('(hover: hover)').matches)) return true;
+  return false;
+}
+
+function _markTouchInteraction() {
+  window._hasSeenTouchInteraction = true;
+  window._lastInputWasTouchUntil = Date.now() + 1000;
+}
+
+function _wasRecentTouchInteraction() {
+  return Date.now() < (window._lastInputWasTouchUntil || 0);
+}
+
+function _isSyntheticClickFromTouch(ev) {
+  return !!(ev && ev.type === 'click' && _wasRecentTouchInteraction());
+}
+
+function _isTouchListEvent(ev) {
+  return !!(ev && ev.changedTouches && ev.changedTouches.length > 0);
+}
+
+function _forEachChangedTouch(ev, callback) {
+  if (!_isTouchListEvent(ev)) return;
+  for (let i = 0; i < ev.changedTouches.length; i++) {
+    callback(ev.changedTouches[i]);
+  }
+}
+
+function _eventCameFromTouch(ev) {
+  if (!ev) return false;
+  if (_isTouchListEvent(ev)) return true;
+  if (ev.pointerType === 'touch') return true;
+  if (typeof ev.type === 'string' && ev.type.startsWith('touch')) return true;
+  return false;
+}
+
+function _isTouchLikeEvent(ev) {
+  if (_eventCameFromTouch(ev)) return true;
+  if (_isSyntheticClickFromTouch(ev)) return true;
+  return false;
+}
+
+function _getVisibleBoardRoots() {
+  const roots = [
+    document.getElementById('board-local'),
+    document.getElementById('board-mp')
+  ].filter(Boolean);
+
+  return roots.filter((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+}
+
+function _pointInsideRect(x, y, rect) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function _touchIsInsideAnyBoard(touch) {
+  if (!touch) return false;
+  const roots = _getVisibleBoardRoots();
+  for (const boardRoot of roots) {
+    const rect = boardRoot.getBoundingClientRect();
+    if (_pointInsideRect(touch.clientX, touch.clientY, rect)) return true;
+  }
+  return false;
+}
+
+function _setBoardTouchActive(active) {
+  const body = document.body;
+  const html = document.documentElement;
+  if (!body || !html) return;
+
+  if (active) {
+    if (body.classList.contains('board-touch-active')) return;
+    window._boardLockScrollY = window.scrollY || window.pageYOffset || 0;
+    body.classList.add('board-touch-active');
+    html.classList.add('board-touch-active');
+    body.style.position = 'fixed';
+    body.style.top = `-${window._boardLockScrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    return;
+  }
+
+  if (!body.classList.contains('board-touch-active')) return;
+  body.classList.remove('board-touch-active');
+  html.classList.remove('board-touch-active');
+  body.style.position = '';
+  body.style.top = '';
+  body.style.left = '';
+  body.style.right = '';
+  body.style.width = '';
+  const y = Number.isFinite(window._boardLockScrollY) ? window._boardLockScrollY : 0;
+  window.scrollTo(0, y);
+}
+
+function _installGlobalBoardTouchGuard() {
+  if (window._boardTouchGuardInstalled) return;
+  window._boardTouchGuardInstalled = true;
+  window._boardTouchLockIdentifiers = new Set();
+
+  document.addEventListener('touchstart', (ev) => {
+    _markTouchInteraction();
+
+    let shouldLock = false;
+    _forEachChangedTouch(ev, (t) => {
+      if (_touchIsInsideAnyBoard(t)) {
+        shouldLock = true;
+        window._boardTouchLockIdentifiers.add(t.identifier);
+      }
+    });
+
+    if (!shouldLock) {
+      const target = ev && ev.target;
+      if (target && target.closest && target.closest('#board-local, #board-mp')) {
+        shouldLock = true;
+      }
+    }
+
+    if (shouldLock) {
+      _setBoardTouchActive(true);
+      if (ev.cancelable) ev.preventDefault();
+    }
+  }, { passive: false, capture: true });
+
+  window._boardTouchDocMove = (ev) => {
+    if (!document.body?.classList.contains('board-touch-active')) return;
+    _markTouchInteraction();
+    if (window._boardTouchLockIdentifiers) {
+      _forEachChangedTouch(ev, (t) => {
+        if (_touchIsInsideAnyBoard(t)) {
+          window._boardTouchLockIdentifiers.add(t.identifier);
+        }
+      });
+    }
+    if (ev.cancelable) ev.preventDefault();
+  };
+
+  window._boardTouchDocEnd = (ev) => {
+    if (window._boardTouchLockIdentifiers) {
+      _forEachChangedTouch(ev, (t) => {
+        window._boardTouchLockIdentifiers.delete(t.identifier);
+      });
+    }
+
+    const stillLocked = window._boardTouchLockIdentifiers && window._boardTouchLockIdentifiers.size > 0;
+    if (!stillLocked) {
+      _setBoardTouchActive(false);
+    }
+  };
+
+  document.addEventListener('touchmove', window._boardTouchDocMove, { passive: false, capture: true });
+  document.addEventListener('touchend', window._boardTouchDocEnd, { passive: true, capture: true });
+  document.addEventListener('touchcancel', window._boardTouchDocEnd, { passive: true, capture: true });
+  window.addEventListener('blur', window._boardTouchDocEnd);
+}
+
+function _findSquareElement(boardRoot, square) {
+  if (!boardRoot || !square) return null;
+  return boardRoot.querySelector(`.square-${square}`) ||
+         boardRoot.querySelector(`[data-square="${square}"]`);
+}
+
+function _extractSquareFromClassName(className) {
+  const text = String(className || '');
+  const parts = text.split(/\s+/);
+  for (const cls of parts) {
+    if (/^square-[a-h][1-8]$/.test(cls)) return cls.slice(7);
+  }
+  return null;
+}
+
+function _extractSquareFromEventTarget(target) {
+  let node = target;
+  while (node && node !== document) {
+    if (node.getAttribute) {
+      const dataSquare = node.getAttribute('data-square');
+      if (dataSquare && /^[a-h][1-8]$/.test(dataSquare)) return dataSquare;
+    }
+    const fromClass = _extractSquareFromClassName(node.className);
+    if (fromClass) return fromClass;
+    if (node.parentElement) {
+      node = node.parentElement;
+    } else {
+      break;
+    }
+  }
+  return null;
+}
+
+function _resolveSquareFromInteraction(boardRoot, ev) {
+  if (!boardRoot || !ev) return null;
+
+  let touchSquare = null;
+  _forEachChangedTouch(ev, (t) => {
+    if (touchSquare) return;
+    const node = document.elementFromPoint(t.clientX, t.clientY);
+    const square = _extractSquareFromEventTarget(node);
+    if (square) touchSquare = square;
+  });
+  if (touchSquare) return touchSquare;
+
+  return _extractSquareFromEventTarget(ev.target);
+}
+
+function _bindBoardTouchLock(boardRoot, key) {
+  if (!boardRoot) return;
+  _installGlobalBoardTouchGuard();
+
+  const moveKey = key === 'local' ? '_touchMoveLocal' : '_touchMoveMp';
+  const startKey = key === 'local' ? '_touchStartLocal' : '_touchStartMp';
+  const endKey = key === 'local' ? '_touchEndLocal' : '_touchEndMp';
+  const pointerDownKey = key === 'local' ? '_pointerDownLocal' : '_pointerDownMp';
+  const pointerMoveKey = key === 'local' ? '_pointerMoveLocal' : '_pointerMoveMp';
+  const dragStartKey = key === 'local' ? '_dragStartLocal' : '_dragStartMp';
+
+  if (window[moveKey]) {
+    boardRoot.removeEventListener('touchmove', window[moveKey]);
+  }
+  if (window[startKey]) {
+    boardRoot.removeEventListener('touchstart', window[startKey]);
+  }
+  if (window[endKey]) {
+    boardRoot.removeEventListener('touchend', window[endKey]);
+    boardRoot.removeEventListener('touchcancel', window[endKey]);
+  }
+  if (window[pointerDownKey]) {
+    boardRoot.removeEventListener('pointerdown', window[pointerDownKey]);
+  }
+  if (window[pointerMoveKey]) {
+    boardRoot.removeEventListener('pointermove', window[pointerMoveKey]);
+  }
+  if (window[dragStartKey]) {
+    boardRoot.removeEventListener('dragstart', window[dragStartKey], true);
+  }
+
+  window[startKey] = (ev) => {
+    _markTouchInteraction();
+    if (window._boardTouchLockIdentifiers) {
+      _forEachChangedTouch(ev, (t) => {
+        window._boardTouchLockIdentifiers.add(t.identifier);
+      });
+    }
+    if (ev.cancelable) ev.preventDefault();
+    _setBoardTouchActive(true);
+  };
+
+  window[moveKey] = (ev) => {
+    if (ev.cancelable) ev.preventDefault();
+    _setBoardTouchActive(true);
+  };
+
+  window[endKey] = (ev) => {
+    if (window._boardTouchLockIdentifiers) {
+      _forEachChangedTouch(ev, (t) => {
+        window._boardTouchLockIdentifiers.delete(t.identifier);
+      });
+    }
+    if (!window._boardTouchLockIdentifiers || window._boardTouchLockIdentifiers.size === 0) {
+      _setBoardTouchActive(false);
+    }
+  };
+
+  window[pointerDownKey] = (ev) => {
+    if (ev.pointerType === 'touch' && ev.cancelable) ev.preventDefault();
+  };
+
+  window[pointerMoveKey] = (ev) => {
+    if (ev.pointerType === 'touch' && ev.cancelable && document.body?.classList.contains('board-touch-active')) {
+      ev.preventDefault();
+    }
+  };
+
+  window[dragStartKey] = (ev) => {
+    if (!shouldUseTapMove()) return;
+    if (ev.cancelable) ev.preventDefault();
+  };
+
+  boardRoot.addEventListener('touchstart', window[startKey], { passive: false });
+  boardRoot.addEventListener('touchmove', window[moveKey], { passive: false });
+  boardRoot.addEventListener('touchend', window[endKey], { passive: true });
+  boardRoot.addEventListener('touchcancel', window[endKey], { passive: true });
+  boardRoot.addEventListener('pointerdown', window[pointerDownKey], { passive: false });
+  boardRoot.addEventListener('pointermove', window[pointerMoveKey], { passive: false });
+  boardRoot.addEventListener('dragstart', window[dragStartKey], true);
+}
+
+function _clearTapSelection(boardRoot, selectedSquare) {
+  if (!boardRoot || !selectedSquare) return;
+  const el = _findSquareElement(boardRoot, selectedSquare);
+  if (el) el.classList.remove('tap-selected');
+}
+
+function _setTapSelection(boardRoot, square) {
+  const el = _findSquareElement(boardRoot, square);
+  if (el) el.classList.add('tap-selected');
+}
+
+let _tapSelectedLocal = null;
+let _tapSelectedMp = null;
+let _lastTapTouchLocal = 0;
+let _lastTapTouchMp = 0;
+
+function _bindTapMoveLocal() {
+  const boardRoot = document.getElementById('board-local');
+  if (!boardRoot) return;
+  _bindBoardTouchLock(boardRoot, 'local');
+
+  if (window._tapHandlerLocal) {
+    boardRoot.removeEventListener('pointerup', window._tapHandlerLocal);
+    boardRoot.removeEventListener('touchend', window._tapHandlerLocal);
+    boardRoot.removeEventListener('click', window._tapHandlerLocal);
+  }
+
+  window._tapHandlerLocal = (ev) => {
+    if (ev.type !== 'click' && !_isTouchLikeEvent(ev)) return;
+    if (ev.type === 'touchend' || (ev.type === 'pointerup' && ev.pointerType === 'touch')) {
+      _lastTapTouchLocal = Date.now();
+      if (ev.cancelable) ev.preventDefault();
+    } else if (ev.type === 'click' && (Date.now() - _lastTapTouchLocal) < 450) {
+      return;
+    }
+
+    const localUi = document.getElementById('local-ui');
+    if (!localUi || localUi.style.display === 'none') return;
+    if (boardLocked || isReviewing() || !game) return;
+
+    const square = _resolveSquareFromInteraction(boardRoot, ev);
+    if (!square) return;
+
+    if (!_tapSelectedLocal) {
+      const legalFromSquare = game.moves({ square, verbose: true });
+      if (!legalFromSquare || legalFromSquare.length === 0) return;
+      _tapSelectedLocal = square;
+      _setTapSelection(boardRoot, square);
+      return;
+    }
+
+    if (_tapSelectedLocal === square) {
+      _clearTapSelection(boardRoot, _tapSelectedLocal);
+      _tapSelectedLocal = null;
+      return;
+    }
+
+    const from = _tapSelectedLocal;
+    const move = game.move({ from, to: square, promotion: 'q' });
+    _clearTapSelection(boardRoot, _tapSelectedLocal);
+    _tapSelectedLocal = null;
+
+    if (!move) {
+      const legalFromSquare = game.moves({ square, verbose: true });
+      if (legalFromSquare && legalFromSquare.length > 0) {
+        _tapSelectedLocal = square;
+        _setTapSelection(boardRoot, square);
+      }
+      return;
+    }
+
+    game.undo();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(`move:${from}${square}`);
+    }
+  };
+
+  boardRoot.addEventListener('pointerup', window._tapHandlerLocal);
+  boardRoot.addEventListener('touchend', window._tapHandlerLocal, { passive: false });
+  boardRoot.addEventListener('click', window._tapHandlerLocal);
+}
+
+function _bindTapMoveMultiplayer() {
+  const boardRoot = document.getElementById('board-mp');
+  if (!boardRoot) return;
+  _bindBoardTouchLock(boardRoot, 'mp');
+
+  if (window._tapHandlerMp) {
+    boardRoot.removeEventListener('pointerup', window._tapHandlerMp);
+    boardRoot.removeEventListener('touchend', window._tapHandlerMp);
+    boardRoot.removeEventListener('click', window._tapHandlerMp);
+  }
+
+  window._tapHandlerMp = (ev) => {
+    if (ev.type !== 'click' && !_isTouchLikeEvent(ev)) return;
+    if (ev.type === 'touchend' || (ev.type === 'pointerup' && ev.pointerType === 'touch')) {
+      _lastTapTouchMp = Date.now();
+      if (ev.cancelable) ev.preventDefault();
+    } else if (ev.type === 'click' && (Date.now() - _lastTapTouchMp) < 450) {
+      return;
+    }
+
+    const mpUi = document.getElementById('multiplayer-ui');
+    if (!mpUi || mpUi.style.display === 'none') return;
+    if (mpIsReviewing() || !game) return;
+
+    const square = _resolveSquareFromInteraction(boardRoot, ev);
+    if (!square) return;
+
+    if (!_tapSelectedMp) {
+      const legalFromSquare = game.moves({ square, verbose: true });
+      if (!legalFromSquare || legalFromSquare.length === 0) return;
+      _tapSelectedMp = square;
+      _setTapSelection(boardRoot, square);
+      return;
+    }
+
+    if (_tapSelectedMp === square) {
+      _clearTapSelection(boardRoot, _tapSelectedMp);
+      _tapSelectedMp = null;
+      return;
+    }
+
+    const from = _tapSelectedMp;
+    const move = game.move({ from, to: square, promotion: 'q' });
+    _clearTapSelection(boardRoot, _tapSelectedMp);
+    _tapSelectedMp = null;
+
+    if (!move) {
+      const legalFromSquare = game.moves({ square, verbose: true });
+      if (legalFromSquare && legalFromSquare.length > 0) {
+        _tapSelectedMp = square;
+        _setTapSelection(boardRoot, square);
+      }
+      return;
+    }
+
+    game.undo();
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setStatus("⚠ Conexión cerrada. Vuelve a entrar al lobby.", "mp");
+      return;
+    }
+    ws.send(`move:${from}${square}`);
+  };
+
+  boardRoot.addEventListener('pointerup', window._tapHandlerMp);
+  boardRoot.addEventListener('touchend', window._tapHandlerMp, { passive: false });
+  boardRoot.addEventListener('click', window._tapHandlerMp);
 }
 
 // ── Navegación del tablero ────────────────────────────────────
@@ -1152,7 +1614,7 @@ function initMultiplayer(lobbyId) {
     game = new Chess();
     try {
       board = Chessboard('board-mp', {
-        draggable: true, position: 'start', onDrop: onDropMulti,
+        draggable: !shouldUseTapMove(), position: 'start', onDrop: onDropMulti,
         pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
       });
       if (board?.resize) board.resize();
@@ -1161,6 +1623,8 @@ function initMultiplayer(lobbyId) {
       setStatus("❌ Error creando el tablero", "mp"); return;
     }
   }
+
+  _bindTapMoveMultiplayer();
 
   // Usar el nuevo sistema robusto de WebSocket
   const displayName = document.getElementById("username")?.textContent.trim() || "Jugador";
@@ -1393,8 +1857,6 @@ function wsHandleMultiplayerMessage(msg) {
       hideAnalysisProgress('mp');
     }
   };
-} // fin initMultiplayer
-
 function renderFeedbackMp(payload) {
   // Formato: tipo|texto|mov1|mov2|mov3|puntos|gm_uci
   //   parts[0]               = tipo

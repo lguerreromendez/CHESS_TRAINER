@@ -519,6 +519,43 @@ body {
   border: 3px solid var(--gold-dim);
   border-radius: 4px;
   box-shadow: 0 0 0 1px rgba(201,168,76,0.08), var(--shadow-deep);
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#board-local .piece-417db,
+#board-mp .piece-417db,
+#board-local img,
+#board-mp img,
+#board-local [class*="square-"],
+#board-mp [class*="square-"] {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+body.board-touch-active {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+html.board-touch-active {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#board-local [class*="square-"].tap-selected,
+#board-mp [class*="square-"].tap-selected,
+#board-local [data-square].tap-selected,
+#board-mp [data-square].tap-selected {
+  box-shadow: inset 0 0 0 4px rgba(201, 168, 76, 0.95), 0 0 0 2px rgba(201, 168, 76, 0.35);
+  filter: brightness(1.12);
 }
 
 /* Override chessboard.js light/dark squares */
