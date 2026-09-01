@@ -138,7 +138,7 @@ function applyMpLiveMove(uci) {
 }
 
 // ── Inicio automático ────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+function bootLocalApp() {
   // Ocultar TODO menos local-ui
   hide('auth-screen');
   hide('menu');
@@ -148,12 +148,22 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Iniciar directamente en modo local
   startLocalGame();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootLocalApp);
+} else {
+  bootLocalApp();
+}
 
 function startLocalGame() {
   show('local-ui');
   initLocalMode();
 }
+
+window.startLocalGame = startLocalGame;
+window.initLocalMode = initLocalMode;
+window.onDropLocal = onDropLocal;
 
 // ── Mode selection ────────────────────────────────────────────
 
@@ -307,7 +317,7 @@ function wsHandleMessage({ data: msg }) {
 function initLocalMode() {
   game  = new Chess();
   board = Chessboard('board-local', {
-    draggable: false,
+    draggable: true,
     position: 'start',
     onDrop: onDropLocal,
     pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
@@ -944,8 +954,30 @@ function _setTapSelection(boardRoot, square) {
   if (el) el.classList.add('tap-selected');
 }
 
+function _clearLegalTargets(boardRoot, squares) {
+  if (!boardRoot || !Array.isArray(squares)) return;
+  for (const square of squares) {
+    const el = _findSquareElement(boardRoot, square);
+    if (el) el.classList.remove('tap-legal-target');
+  }
+}
+
+function _showLegalTargets(boardRoot, squares) {
+  if (!boardRoot) return [];
+  const legalSquares = Array.isArray(squares)
+    ? [...new Set(squares.filter(square => /^[a-h][1-8]$/.test(String(square))))]
+    : [];
+  for (const square of legalSquares) {
+    const el = _findSquareElement(boardRoot, square);
+    if (el) el.classList.add('tap-legal-target');
+  }
+  return legalSquares;
+}
+
 let _tapSelectedLocal = null;
 let _tapSelectedMp = null;
+let _tapLegalTargetsLocal = [];
+let _tapLegalTargetsMp = [];
 let _lastTapTouchLocal = 0;
 let _lastTapTouchMp = 0;
 
@@ -953,11 +985,12 @@ function _bindTapMoveLocal() {
   const boardRoot = document.getElementById('board-local');
   if (!boardRoot) return;
   _bindBoardTouchLock(boardRoot, 'local');
+  const captureOpts = { capture: true };
 
   if (window._tapHandlerLocal) {
-    boardRoot.removeEventListener('pointerup', window._tapHandlerLocal);
-    boardRoot.removeEventListener('touchend', window._tapHandlerLocal);
-    boardRoot.removeEventListener('click', window._tapHandlerLocal);
+    boardRoot.removeEventListener('pointerup', window._tapHandlerLocal, captureOpts);
+    boardRoot.removeEventListener('touchend', window._tapHandlerLocal, captureOpts);
+    boardRoot.removeEventListener('click', window._tapHandlerLocal, captureOpts);
   }
 
   window._tapHandlerLocal = (ev) => {
@@ -980,12 +1013,15 @@ function _bindTapMoveLocal() {
       const legalFromSquare = game.moves({ square, verbose: true });
       if (!legalFromSquare || legalFromSquare.length === 0) return;
       _tapSelectedLocal = square;
+      _tapLegalTargetsLocal = _showLegalTargets(boardRoot, legalFromSquare.map((move) => move.to));
       _setTapSelection(boardRoot, square);
       return;
     }
 
     if (_tapSelectedLocal === square) {
       _clearTapSelection(boardRoot, _tapSelectedLocal);
+      _clearLegalTargets(boardRoot, _tapLegalTargetsLocal);
+      _tapLegalTargetsLocal = [];
       _tapSelectedLocal = null;
       return;
     }
@@ -993,12 +1029,15 @@ function _bindTapMoveLocal() {
     const from = _tapSelectedLocal;
     const move = game.move({ from, to: square, promotion: 'q' });
     _clearTapSelection(boardRoot, _tapSelectedLocal);
+    _clearLegalTargets(boardRoot, _tapLegalTargetsLocal);
+    _tapLegalTargetsLocal = [];
     _tapSelectedLocal = null;
 
     if (!move) {
       const legalFromSquare = game.moves({ square, verbose: true });
       if (legalFromSquare && legalFromSquare.length > 0) {
         _tapSelectedLocal = square;
+        _tapLegalTargetsLocal = _showLegalTargets(boardRoot, legalFromSquare.map((move) => move.to));
         _setTapSelection(boardRoot, square);
       }
       return;
@@ -1010,20 +1049,21 @@ function _bindTapMoveLocal() {
     }
   };
 
-  boardRoot.addEventListener('pointerup', window._tapHandlerLocal);
-  boardRoot.addEventListener('touchend', window._tapHandlerLocal, { passive: false });
-  boardRoot.addEventListener('click', window._tapHandlerLocal);
+  boardRoot.addEventListener('pointerup', window._tapHandlerLocal, captureOpts);
+  boardRoot.addEventListener('touchend', window._tapHandlerLocal, { passive: false, capture: true });
+  boardRoot.addEventListener('click', window._tapHandlerLocal, captureOpts);
 }
 
 function _bindTapMoveMultiplayer() {
   const boardRoot = document.getElementById('board-mp');
   if (!boardRoot) return;
   _bindBoardTouchLock(boardRoot, 'mp');
+  const captureOpts = { capture: true };
 
   if (window._tapHandlerMp) {
-    boardRoot.removeEventListener('pointerup', window._tapHandlerMp);
-    boardRoot.removeEventListener('touchend', window._tapHandlerMp);
-    boardRoot.removeEventListener('click', window._tapHandlerMp);
+    boardRoot.removeEventListener('pointerup', window._tapHandlerMp, captureOpts);
+    boardRoot.removeEventListener('touchend', window._tapHandlerMp, captureOpts);
+    boardRoot.removeEventListener('click', window._tapHandlerMp, captureOpts);
   }
 
   window._tapHandlerMp = (ev) => {
@@ -1046,12 +1086,15 @@ function _bindTapMoveMultiplayer() {
       const legalFromSquare = game.moves({ square, verbose: true });
       if (!legalFromSquare || legalFromSquare.length === 0) return;
       _tapSelectedMp = square;
+      _tapLegalTargetsMp = _showLegalTargets(boardRoot, legalFromSquare.map((move) => move.to));
       _setTapSelection(boardRoot, square);
       return;
     }
 
     if (_tapSelectedMp === square) {
       _clearTapSelection(boardRoot, _tapSelectedMp);
+      _clearLegalTargets(boardRoot, _tapLegalTargetsMp);
+      _tapLegalTargetsMp = [];
       _tapSelectedMp = null;
       return;
     }
@@ -1059,12 +1102,15 @@ function _bindTapMoveMultiplayer() {
     const from = _tapSelectedMp;
     const move = game.move({ from, to: square, promotion: 'q' });
     _clearTapSelection(boardRoot, _tapSelectedMp);
+    _clearLegalTargets(boardRoot, _tapLegalTargetsMp);
+    _tapLegalTargetsMp = [];
     _tapSelectedMp = null;
 
     if (!move) {
       const legalFromSquare = game.moves({ square, verbose: true });
       if (legalFromSquare && legalFromSquare.length > 0) {
         _tapSelectedMp = square;
+        _tapLegalTargetsMp = _showLegalTargets(boardRoot, legalFromSquare.map((move) => move.to));
         _setTapSelection(boardRoot, square);
       }
       return;
@@ -1078,9 +1124,9 @@ function _bindTapMoveMultiplayer() {
     ws.send(`move:${from}${square}`);
   };
 
-  boardRoot.addEventListener('pointerup', window._tapHandlerMp);
-  boardRoot.addEventListener('touchend', window._tapHandlerMp, { passive: false });
-  boardRoot.addEventListener('click', window._tapHandlerMp);
+  boardRoot.addEventListener('pointerup', window._tapHandlerMp, captureOpts);
+  boardRoot.addEventListener('touchend', window._tapHandlerMp, { passive: false, capture: true });
+  boardRoot.addEventListener('click', window._tapHandlerMp, captureOpts);
 }
 
 // ── Navegación del tablero ────────────────────────────────────
@@ -1644,7 +1690,7 @@ function initMultiplayer(lobbyId) {
     game = new Chess();
     try {
       board = Chessboard('board-mp', {
-        draggable: false, position: 'start', onDrop: onDropMulti,
+        draggable: true, position: 'start', onDrop: onDropMulti,
         pieceTheme: 'https://cdn.jsdelivr.net/gh/oakmac/chessboardjs@master/website/img/chesspieces/wikipedia/{piece}.png'
       });
       if (board?.resize) board.resize();
