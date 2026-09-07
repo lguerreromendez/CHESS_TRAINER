@@ -1812,14 +1812,6 @@ function wsHandleMultiplayerMessage(msg) {
         renderLobbyMembers([]);
       }
     }
-    else if (msg.startsWith("gm_move:"))     {
-      const san = msg.substring(8).trim();
-      const el  = document.getElementById("status-mp");
-      if (el) {
-        el.textContent = `♟ GM jugó: ${san}`;
-        setTimeout(() => { if (el.textContent.includes('GM jugó')) el.textContent = ''; }, 4000);
-      }
-    }
     else if (msg.startsWith("analysis_progress:")) {
       const parts   = msg.substring(18).split('|');
       const current = parseInt(parts[0]) || 0;

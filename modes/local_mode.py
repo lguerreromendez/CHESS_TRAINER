@@ -347,6 +347,12 @@ class LocalMode:
         except Exception:
             gm_san = gm_uci
 
+        rank = None
+        for idx, uci in enumerate(top3_uci[:3], start=1):
+            if player_uci == uci:
+                rank = idx
+                break
+
         def _record(points, label, top3_san, top3_scores, needs_bg):
             # Actualizar estadísticas de sesión
             if is_gm:
@@ -374,12 +380,44 @@ class LocalMode:
             )
         if is_engine1:
             return _record(
-                10, f"¡Mejor del módulo! GM jugó {gm_san}", top3_san, top3_scores, False
+                12, f"¡Mejor del módulo! GM jugó {gm_san}", top3_san, top3_scores, False
+            )
+        if rank == 2:
+            if is_gm:
+                return _record(
+                    6,
+                    f"¡ACERTADO con GM! Era la #2 del módulo. GM jugó {gm_san}",
+                    top3_san,
+                    top3_scores,
+                    False,
+                )
+            return _record(
+                6,
+                f"Jugada #2 del módulo · GM jugó {gm_san}",
+                top3_san,
+                top3_scores,
+                False,
+            )
+        if rank == 3:
+            if is_gm:
+                return _record(
+                    3,
+                    f"¡ACERTADO con GM! Era la #3 del módulo. GM jugó {gm_san}",
+                    top3_san,
+                    top3_scores,
+                    False,
+                )
+            return _record(
+                3,
+                f"Jugada #3 del módulo · GM jugó {gm_san}",
+                top3_san,
+                top3_scores,
+                False,
             )
         if is_gm:
             return _record(
-                8,
-                f"¡ACERTADO con GM! El módulo prefería otra. GM jugó {gm_san}",
+                2,
+                f"¡ACERTADO con GM! Fuera del top 3. GM jugó {gm_san}",
                 top3_san,
                 top3_scores,
                 False,
@@ -432,6 +470,7 @@ class LocalMode:
 
         self.board.push(self.pgn_moves[played_turn])
         self.current_turn += 1
+        turn_label = "blancas" if self.board.turn else "negras"
 
         top3_feedback = (
             "|".join(
@@ -452,7 +491,7 @@ class LocalMode:
 
         if self.current_turn < total_moves:
             await player.ws.send_text(
-                f"turno:Adivina jugada {self.current_turn + 1} de {total_moves}"
+                f"turno:Adivina jugada {self.current_turn + 1} de {total_moves} · Juegan {turn_label}"
             )
         else:
             summary = self.get_summary(player.score)

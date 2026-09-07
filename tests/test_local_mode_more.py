@@ -36,3 +36,30 @@ def test_get_top3_str_and_calculate_points(monkeypatch):
     points, label, top3_san, top3_scores, needs_bg = lm.calculate_points(m1, 0)
     assert points == 12
     assert "PERFECTO" in label or "PERFECTO" in label.upper()
+
+
+def test_calculate_points_fixed_top3_and_gm_outside_top3(monkeypatch):
+    monkeypatch.setattr(
+        local_mode, "get_shared_stockfish_service", lambda: DummyStockfish()
+    )
+
+    lm = local_mode.LocalMode(auto_load=False)
+    gm_move = chess.Move.from_uci("e2e4")
+    top2_move = chess.Move.from_uci("d2d4")
+    lm.pgn_moves = [gm_move]
+    lm.stockfish_best = [
+        [
+            ("g1f3", "Nf3", 100),
+            ("d2d4", "d4", 80),
+            ("c2c4", "c4", 60),
+        ]
+    ]
+    lm.board = chess.Board()
+
+    points_top2, label_top2, *_ = lm.calculate_points(top2_move, 0)
+    assert points_top2 == 6
+    assert "#2" in label_top2 or "2" in label_top2
+
+    points_gm, label_gm, *_ = lm.calculate_points(gm_move, 0)
+    assert points_gm == 2
+    assert "FUERA DEL TOP 3" in label_gm.upper()
