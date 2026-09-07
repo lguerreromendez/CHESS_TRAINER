@@ -347,6 +347,11 @@ class LocalMode:
         except Exception:
             gm_san = gm_uci
 
+        player_eval = self._eval_move_sync(self.board.fen(), player_uci)
+        player_eval_text = (
+            f" · Stockfish: {player_eval / 100:+.2f}" if player_eval is not None else ""
+        )
+
         rank = None
         for idx, uci in enumerate(top3_uci[:3], start=1):
             if player_uci == uci:
@@ -417,7 +422,7 @@ class LocalMode:
         if is_gm:
             return _record(
                 2,
-                f"¡ACERTADO con GM! Fuera del top 3. GM jugó {gm_san}",
+                f"¡ACERTADO con GM! Fuera del top 3{player_eval_text}. GM jugó {gm_san}",
                 top3_san,
                 top3_scores,
                 False,
@@ -447,7 +452,13 @@ class LocalMode:
                         0, f"Demasiado inferior. {base}", top3_san, top3_scores, False
                     )
 
-        return _record(0, f"Fallaste. GM jugó {gm_san}", top3_san, top3_scores, True)
+        return _record(
+            0,
+            f"Fallaste. GM jugó {gm_san}{player_eval_text}",
+            top3_san,
+            top3_scores,
+            True,
+        )
 
     async def handle_move(self, player, uci_move, clients):
         if self.current_turn >= len(self.pgn_moves):

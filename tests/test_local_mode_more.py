@@ -42,6 +42,11 @@ def test_calculate_points_fixed_top3_and_gm_outside_top3(monkeypatch):
     monkeypatch.setattr(
         local_mode, "get_shared_stockfish_service", lambda: DummyStockfish()
     )
+    monkeypatch.setattr(
+        local_mode.LocalMode,
+        "_eval_move_sync",
+        lambda self, board_fen, player_uci: -137,
+    )
 
     lm = local_mode.LocalMode(auto_load=False)
     gm_move = chess.Move.from_uci("e2e4")
@@ -63,3 +68,5 @@ def test_calculate_points_fixed_top3_and_gm_outside_top3(monkeypatch):
     points_gm, label_gm, *_ = lm.calculate_points(gm_move, 0)
     assert points_gm == 2
     assert "FUERA DEL TOP 3" in label_gm.upper()
+    assert "STOCKFISH" in label_gm.upper()
+    assert "-1.37" in label_gm
